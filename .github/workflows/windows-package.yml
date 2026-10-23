@@ -53,10 +53,11 @@ jobs:
           mkdir -p $smoke
           cp -r target/windows/Jelly $smoke/app
           # The runner has no GPU: Mesa's software OpenGL (llvmpipe) in place
-          # of Windows' OpenGL 1.1, in this copy only
-          for f in opengl32.dll libgallium_wgl.dll; do cp "$MINGW_PREFIX/bin/$f" $smoke/app; ntldd -R "$MINGW_PREFIX/bin/$f"; done \
+          # of Windows' OpenGL 1.1, next to the app in this copy only
+          bin=$smoke/app/runtime/bin
+          for f in opengl32.dll libgallium_wgl.dll; do cp "$MINGW_PREFIX/bin/$f" $bin; ntldd -R "$MINGW_PREFIX/bin/$f"; done \
             | tr '\\' / | grep -io "[^ ]*/${MINGW_PREFIX#/}/bin/[^ ]*\.dll" | sort -fu \
-            | while read -r dll; do cp -n "$(cygpath -u "$dll")" $smoke/app; done
+            | while read -r dll; do cp -n "$(cygpath -u "$dll")" $bin; done
           printf '%s\n' '[Script Info]' 'ScriptType: v4.00+' '' '[V4+ Styles]' \
             'Format: Name, Fontname, Fontsize, PrimaryColour, Bold, Alignment, MarginV' \
             'Style: Default,Arial,48,&H00FFFFFF,1,2,40' '' '[Events]' \

@@ -6,6 +6,12 @@ All notable changes to Jelly are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The Windows folder no longer shows a few hundred DLLs: the app and its
+  libraries moved into `runtime`, and the `jelly.exe` next to it starts the
+  app, with the same command line.
+
 ## [0.1.0] - 2026-10-23
 
 The first release.

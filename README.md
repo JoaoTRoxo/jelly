@@ -70,9 +70,10 @@ when run again.
 
 Download `jelly-*-windows-x86_64.zip` from a
 [release](https://github.com/JoaoTRoxo/jelly/releases), unzip it anywhere and
-run `Jelly\jelly.exe`. Nothing needs installing, but the files next to it
-have to stay there. Windows warns about it the first time, as it isn't signed:
-choose More info, then Run anyway.
+run `Jelly\jelly.exe`. Nothing needs installing, but keep it in its folder:
+it starts the app in `runtime`, next to it, which has the libraries it needs.
+Windows warns about it the first time, as it isn't signed: choose More info,
+then Run anyway.
 
 ### macOS
 

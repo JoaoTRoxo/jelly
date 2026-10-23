@@ -1,9 +1,10 @@
 #!/bin/sh
 # Make the Windows release: target/windows/Jelly, a folder that runs on any
-# 64-bit Windows 10 or 11 without installing anything (the app, every DLL it
-# loads and the data GTK looks for next to them, with their licenses), and
-# target/windows/jelly-VERSION-windows-x86_64.zip of it. Run it in an MSYS2
-# UCRT64 shell after cargo build --release.
+# 64-bit Windows 10 or 11 without installing anything, and
+# target/windows/jelly-VERSION-windows-x86_64.zip of it. Its jelly.exe starts
+# the app in runtime\bin, next to every DLL it loads; the data GTK looks for
+# is in runtime too, and the licenses of all that in licenses. Run it in an
+# MSYS2 UCRT64 shell after cargo build --release.
 #
 #   pacman -S zip mingw-w64-ucrt-x86_64-{ntldd,librsvg,webp-pixbuf-loader}
 #   tools/windows-bundle.sh
@@ -11,33 +12,44 @@ set -eu
 cd "$(dirname "$0")/.."
 version=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n 1)
 out=target/windows/Jelly
+runtime=$out/runtime
 sources=target/windows/sources.txt
 rm -rf target/windows
-mkdir -p "$out/lib" "$out/share/glib-2.0/schemas" "$out/share/icons/hicolor/scalable/apps" "$out/etc"
+mkdir -p "$runtime/bin" "$runtime/lib" "$runtime/share/glib-2.0/schemas" \
+    "$runtime/share/icons/hicolor/scalable/apps" "$runtime/etc"
 
 # Copy something of MSYS2's, remembering it for its license
 take() {
-    cp -r "$MINGW_PREFIX/$1" "$out/$2"
+    cp -r "$MINGW_PREFIX/$1" "$runtime/$2"
     echo "$MINGW_PREFIX/$1" >> "$sources"
 }
 
-cp target/release/jelly.exe "$out/"
+# The app in runtime\bin, where GLib, GTK and fontconfig look for their data
+# one folder up, and the launcher that starts it on top
+cp target/release/jelly.exe "$runtime/bin/"
+cargo build --release --locked --bin jelly-launcher --features windows-launcher
+cp target/release/jelly-launcher.exe "$out/jelly.exe"
+# The launcher can only use Windows' own DLLs: it doesn't see runtime\bin
+if ntldd -R "$out/jelly.exe" | tr '\\' / | grep -i "/${MINGW_PREFIX#/}/bin/"; then
+    echo "The launcher needs those DLLs of MSYS2's" >&2
+    exit 1
+fi
 # Loaded by name rather than linked: the image loaders (SVG icons, WebP posters)
 take lib/gdk-pixbuf-2.0 lib/
-# What GLib, GTK and fontconfig look for in share/ and etc/ next to their
-# DLLs: settings schemas, icons, the font setup
+# What GLib, GTK and fontconfig look for in share/ and etc/, one folder up
+# from their DLLs: settings schemas, icons, the font setup
 take share/glib-2.0/schemas/gschemas.compiled share/glib-2.0/schemas/
 take share/icons/Adwaita share/icons/
-rm -rf "$out/share/icons/Adwaita/cursors"
+rm -rf "$runtime/share/icons/Adwaita/cursors"
 take share/icons/hicolor/index.theme share/icons/hicolor/
 take etc/fonts etc/
-cp data/io.github.joaotroxo.Jelly.svg "$out/share/icons/hicolor/scalable/apps/"
+cp data/io.github.joaotroxo.Jelly.svg "$runtime/share/icons/hicolor/scalable/apps/"
 
 # Every DLL all of that needs, from MSYS2's (Windows' own stay out)
-find "$out" -name '*.exe' -o -name '*.dll' | while read -r f; do ntldd -R "$f"; done \
+find "$runtime" -name '*.exe' -o -name '*.dll' | while read -r f; do ntldd -R "$f"; done \
     | tr '\\' / | grep -io "[^ ]*/${MINGW_PREFIX#/}/bin/[^ ]*\.dll" | sort -fu \
     | while read -r dll; do
-        cp -n "$(cygpath -u "$dll")" "$out/"
+        cp -n "$(cygpath -u "$dll")" "$runtime/bin/"
         cygpath -u "$dll" >> "$sources"
     done
 
@@ -62,8 +74,9 @@ cp LICENSE "$out/LICENSE.txt"
 cat > "$out/README.txt" <<EOF
 Jelly $version for Windows
 
-Run jelly.exe. Keep the other files next to it: they're the libraries and data
-it needs. Settings and sign-ins are kept in %LOCALAPPDATA%\\jelly.
+Run jelly.exe. Keep it in this folder: it starts the app in runtime\\, which
+has the libraries and data it needs. Settings and sign-ins are kept in
+%LOCALAPPDATA%\\jelly.
 
 Jelly is free software under the GNU General Public License, version 3 or
 later (LICENSE.txt). The licenses of what it includes are in licenses\\.

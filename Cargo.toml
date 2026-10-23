@@ -10,6 +10,7 @@ readme = "README.md"
 keywords = ["jellyfin", "gtk", "libadwaita", "mpv", "media-player"]
 categories = ["multimedia::video"]
 publish = false
+default-run = "jelly"
 
 [dependencies]
 adw = { package = "libadwaita", version = "0.8", features = ["v1_6"] }
@@ -25,6 +26,13 @@ ureq = { version = "3.4", features = ["json"] }
 [features]
 # Development: render the window to a PNG (tools/screenshot.sh)
 screenshot = []
+# The Windows release's jelly.exe, which starts the app in its runtime folder
+# (tools/windows-bundle.sh builds it)
+windows-launcher = []
+
+[[bin]]
+name = "jelly-launcher"
+required-features = ["windows-launcher"]
 
 [profile.release]
 lto = "thin"
