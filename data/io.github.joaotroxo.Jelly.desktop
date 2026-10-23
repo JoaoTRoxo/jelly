@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Jelly
+GenericName=Jellyfin Client
+Comment=Watch your Jellyfin library
+Exec=jelly
+Icon=io.github.joaotroxo.Jelly
+Terminal=false
+Categories=AudioVideo;Video;Player;
+Keywords=jellyfin;movies;series;anime;tv;video;
+StartupNotify=true

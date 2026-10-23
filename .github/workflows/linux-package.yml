@@ -1,0 +1,68 @@
+# The Linux tarball, built on Debian 13 (so it runs on distributions with its
+# glibc or newer), then installed and started on a Debian with only the
+# runtime libraries. Called by CI and Release.
+name: Linux package
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-24.04
+    container: debian:trixie
+    timeout-minutes: 30
+    steps:
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          apt-get install --no-install-recommends --yes \
+            ca-certificates curl gcc git libc6-dev pkg-config \
+            libgtk-4-dev libadwaita-1-dev libmpv-dev
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install rustup
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+            | sh -s -- -y --profile minimal --default-toolchain none
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      - name: Build the tarball
+        run: |
+          rustup toolchain install
+          tools/linux-package.sh
+      - name: Upload the tarball
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: linux-package
+          path: target/package/jelly-*-linux-x86_64.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+  smoke:
+    name: Install and start
+    needs: build
+    runs-on: ubuntu-24.04
+    container: debian:trixie
+    timeout-minutes: 10
+    steps:
+      - name: Install the runtime libraries only
+        run: |
+          apt-get update
+          apt-get install --no-install-recommends --yes libgtk-4-1 libadwaita-1-0 libmpv2
+      - name: Download the tarball
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: linux-package
+      - name: Install it and check it starts
+        run: |
+          tar -xzf jelly-*-linux-x86_64.tar.gz
+          dir=$(find . -maxdepth 1 -type d -name 'jelly-*' -print -quit)
+          if ldd "$dir/bin/jelly" | grep 'not found'; then exit 1; fi
+          PREFIX="$RUNNER_TEMP/prefix" "$dir/install.sh"
+          version=${dir#./jelly-}
+          test "$("$RUNNER_TEMP/prefix/bin/jelly" --version)" = "jelly ${version%-linux-*}"
+          test -f "$RUNNER_TEMP/prefix/share/applications/io.github.joaotroxo.Jelly.desktop"
+          test -f "$RUNNER_TEMP/prefix/share/metainfo/io.github.joaotroxo.Jelly.metainfo.xml"

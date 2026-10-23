@@ -1,0 +1,118 @@
+# The Windows zip, built with MSYS2's UCRT64 packages, then started outside
+# MSYS2 (with only Windows' own DLLs on the PATH) to check that nothing it
+# needs is missing, and made to play a video with styled subtitles. Called
+# by CI and Release.
+name: Windows package
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and start
+    runs-on: windows-2025
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install MSYS2 and the build dependencies
+        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2.33.0
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            zip
+            mingw-w64-ucrt-x86_64-rust
+            mingw-w64-ucrt-x86_64-gtk4
+            mingw-w64-ucrt-x86_64-libadwaita
+            mingw-w64-ucrt-x86_64-mpv
+            mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-ntldd
+            mingw-w64-ucrt-x86_64-librsvg
+            mingw-w64-ucrt-x86_64-webp-pixbuf-loader
+            mingw-w64-ucrt-x86_64-mesa
+      - name: Restore the build cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: target/release
+          key: windows-${{ hashFiles('Cargo.lock') }}
+          restore-keys: windows-
+      - name: Build
+        run: cargo build --release --locked
+      - name: Make the folder and its zip
+        run: tools/windows-bundle.sh
+      - name: Prepare a copy that plays video
+        run: |
+          smoke=target/windows-smoke
+          mkdir -p $smoke
+          cp -r target/windows/Jelly $smoke/app
+          # The runner has no GPU: Mesa's software OpenGL (llvmpipe) in place
+          # of Windows' OpenGL 1.1, in this copy only
+          for f in opengl32.dll libgallium_wgl.dll; do cp "$MINGW_PREFIX/bin/$f" $smoke/app; ntldd -R "$MINGW_PREFIX/bin/$f"; done \
+            | tr '\\' / | grep -io "[^ ]*/${MINGW_PREFIX#/}/bin/[^ ]*\.dll" | sort -fu \
+            | while read -r dll; do cp -n "$(cygpath -u "$dll")" $smoke/app; done
+          printf '%s\n' '[Script Info]' 'ScriptType: v4.00+' '' '[V4+ Styles]' \
+            'Format: Name, Fontname, Fontsize, PrimaryColour, Bold, Alignment, MarginV' \
+            'Style: Default,Arial,48,&H00FFFFFF,1,2,40' '' '[Events]' \
+            'Format: Layer, Start, End, Style, Text' \
+            'Dialogue: 0,0:00:00.00,0:01:00.00,Default,A styled subtitle' > $smoke/subs.ass
+          ffmpeg -loglevel error -f lavfi -i testsrc2=size=1280x720:rate=24:duration=60 \
+            -f lavfi -i sine=duration=60 -i $smoke/subs.ass -map 0 -map 1 -map 2 \
+            -c:v libx264 -preset ultrafast -c:a aac -c:s ass -disposition:s:0 default $smoke/video.mkv
+      - name: Start it outside MSYS2
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          $smoke = "$PWD\target\windows-smoke"
+          $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+          $env:GALLIUM_DRIVER = "llvmpipe"
+          $env:JELLY_MPV_LOG = "all=info"
+          # Start `exe` with `arguments`, and after 20 s take a screenshot and
+          # check it's still running
+          function Run($name, $exe, [string[]]$arguments) {
+            $start = @{ FilePath = $exe; WorkingDirectory = $env:USERPROFILE; PassThru = $true
+                        RedirectStandardOutput = "$smoke\$name.out.txt"; RedirectStandardError = "$smoke\$name.err.txt" }
+            if ($arguments) { $start.ArgumentList = $arguments }
+            $app = Start-Process @start
+            Start-Sleep 20
+            $screen = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+            $image = New-Object System.Drawing.Bitmap $screen.Width, $screen.Height
+            [System.Drawing.Graphics]::FromImage($image).CopyFromScreen($screen.Location, [System.Drawing.Point]::Empty, $screen.Size)
+            $image.Save("$smoke\$name.png")
+            Get-Content "$smoke\$name.err.txt"
+            if ($app.HasExited) { throw "${name}: jelly.exe exited with $($app.ExitCode)" }
+            Stop-Process $app
+          }
+          Run sign-in "$PWD\target\windows\Jelly\jelly.exe"
+          Run play "$smoke\app\jelly.exe" "--play", "$smoke\video.mkv"
+          if (-not (Select-String -Quiet -Path "$smoke\play.out.txt" -Pattern "^VO: \[libmpv\]")) {
+            Get-Content "$smoke\play.out.txt"
+            throw "play: mpv never showed the video"
+          }
+          $version = (& target\windows\Jelly\jelly.exe --version | Out-String).Trim()
+          $expected = "jelly " + (Select-String -Path Cargo.toml -Pattern '^version = "(.*)"$').Matches[0].Groups[1].Value
+          if ($version -ne $expected) { throw "jelly.exe --version said '$version', not '$expected'" }
+      - name: Upload the zip
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-package
+          path: target/windows/jelly-*-windows-x86_64.zip
+          if-no-files-found: error
+          retention-days: 7
+          # Already a zip
+          compression-level: 0
+      - name: Upload what the start looked like
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-smoke
+          path: |
+            target/windows-smoke/*.png
+            target/windows-smoke/*.txt
+          retention-days: 7

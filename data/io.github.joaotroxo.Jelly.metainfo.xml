@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.joaotroxo.Jelly</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+
+  <name>Jelly</name>
+  <summary>Watch your Jellyfin library</summary>
+  <developer id="io.github.joaotroxo">
+    <name>Joao Roxo</name>
+  </developer>
+
+  <description>
+    <p>
+      Jelly is a native client for Jellyfin media servers. It plays every file
+      as it is with mpv, so the server never has to transcode: MKV, 10-bit HEVC,
+      AV1, Opus, FLAC, styled ASS subtitles with their fonts and PGS subtitles
+      all play directly, with hardware decoding.
+    </p>
+    <ul>
+      <li>Continue Watching, Next Up and what's new in each library</li>
+      <li>Resumes where you left off on any device, and reports what you watch back to Jellyfin</li>
+      <li>Skips intros and recaps, and counts down to the next episode over the credits</li>
+      <li>Picks audio and subtitle tracks by your Jellyfin language settings</li>
+      <li>Requests what isn't in the library yet through Seerr, and shows how its download is going</li>
+      <li>A command line for keyboard shortcuts and launchers</li>
+    </ul>
+  </description>
+
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/JoaoTRoxo/jelly/main/docs/screenshots/home.png</image>
+      <caption>Home, with what's new and what you're watching</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/JoaoTRoxo/jelly/main/docs/screenshots/movie.png</image>
+      <caption>A movie's page</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/JoaoTRoxo/jelly/main/docs/screenshots/show.png</image>
+      <caption>A show's episodes</caption>
+    </screenshot>
+  </screenshots>
+
+  <launchable type="desktop-id">io.github.joaotroxo.Jelly.desktop</launchable>
+  <provides>
+    <binary>jelly</binary>
+  </provides>
+
+  <url type="homepage">https://github.com/JoaoTRoxo/jelly</url>
+  <url type="bugtracker">https://github.com/JoaoTRoxo/jelly/issues</url>
+  <url type="vcs-browser">https://github.com/JoaoTRoxo/jelly</url>
+
+  <content_rating type="oars-1.1"/>
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+  <requires>
+    <internet>always</internet>
+  </requires>
+
+  <branding>
+    <color type="primary" scheme_preference="light">#ffd76a</color>
+    <color type="primary" scheme_preference="dark">#8a4b07</color>
+  </branding>
+
+  <releases>
+    <release version="0.1.0" date="2026-10-23">
+      <description>
+        <p>The first release.</p>
+      </description>
+    </release>
+  </releases>
+</component>

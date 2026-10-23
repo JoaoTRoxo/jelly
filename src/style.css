@@ -1,0 +1,253 @@
+/* Palette: the icon's gold (in dark mode, also its deep plum: style-dark.css).
+   libadwaita derives the rest (text accent, focus rings) */
+:root {
+  --accent-bg-color: #f0a92b;
+  --accent-fg-color: rgb(0 0 0 / 85%);
+}
+
+/* Player */
+.player {
+  background-color: black;
+}
+.player-top {
+  padding: 14px 18px 64px 18px;
+  background-image: linear-gradient(to bottom, alpha(black, 0.75), alpha(black, 0));
+  color: white;
+}
+.player-bottom {
+  padding: 64px 18px 14px 18px;
+  background-image: linear-gradient(to top, alpha(black, 0.85), alpha(black, 0));
+  color: white;
+}
+.player-top .dim-label {
+  color: alpha(white, 0.75);
+}
+.player button {
+  color: white;
+}
+.player .play-button {
+  min-width: 46px;
+  min-height: 46px;
+}
+.player scale trough {
+  min-height: 6px;
+}
+.skip-button {
+  padding: 10px 26px;
+  font-weight: bold;
+  background-color: alpha(white, 0.92);
+  color: black;
+}
+.skip-button:hover {
+  background-color: white;
+}
+.player-error {
+  background-color: alpha(black, 0.75);
+  color: white;
+}
+/* Chapter starts, as ticks over the seek bar */
+.player scale > marks.top {
+  margin-bottom: 2px;
+}
+.player scale marks.top indicator {
+  min-height: 5px;
+  min-width: 2px;
+  color: alpha(white, 0.6);
+}
+/* The next episode's card, over the credits */
+.up-next {
+  padding: 12px;
+  border-radius: 18px;
+  background-color: rgb(16 12 22 / 88%);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 50%);
+  color: white;
+}
+.up-next button.pill {
+  padding: 6px 18px;
+}
+.player .up-next button.suggested-action {
+  color: var(--accent-fg-color);
+}
+.up-next-progress trough,
+.up-next-progress progress {
+  min-height: 3px;
+  border-radius: 2px;
+}
+.up-next-progress trough {
+  background-color: alpha(white, 0.15);
+}
+
+/* Images: a shimmer while they load (they then fade in, see images.rs) */
+picture.image-loading {
+  background-image: linear-gradient(100deg, transparent 40%, color-mix(in srgb, currentColor 7%, transparent) 50%, transparent 60%);
+  background-size: 300% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+@keyframes shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: 0% 0; }
+}
+
+/* Cards: the picture lifts on hover, instead of a button background */
+.card-button {
+  padding: 6px;
+  border-radius: 14px;
+}
+.media-card,
+.media-card:hover,
+.media-card:active {
+  background-color: transparent;
+}
+.art {
+  border-radius: 10px;
+  background-color: alpha(currentColor, 0.08);
+  box-shadow: 0 2px 6px -2px rgb(0 0 0 / 30%);
+  transition: transform 250ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 250ms ease-out;
+}
+.card-button:hover .art,
+.card-button:focus-visible .art {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 20px -6px rgb(0 0 0 / 60%);
+}
+.card-button:active .art {
+  transform: translateY(-1px) scale(0.98);
+}
+.card-title {
+  font-weight: bold;
+  transition: color 200ms ease-out;
+}
+.media-card:hover .card-title,
+.media-card:focus-visible .card-title {
+  color: var(--accent-color);
+}
+.badge {
+  background-color: var(--accent-bg-color);
+  color: var(--accent-fg-color);
+  border-radius: 99px;
+  padding: 2px 8px;
+  margin: 8px;
+  font-weight: bold;
+  font-size: 0.85em;
+}
+.watched-badge {
+  background-color: alpha(black, 0.6);
+  color: white;
+  border-radius: 99px;
+  padding: 4px;
+  margin: 8px;
+}
+.progress-strip {
+  margin: 0 10px 8px 10px;
+}
+.progress-strip trough,
+.progress-strip progress {
+  min-height: 5px;
+  border-radius: 3px;
+}
+.progress-strip trough {
+  background-color: alpha(black, 0.5);
+}
+
+/* Shelves run edge to edge, with their titles lined up with the first
+   picture (row padding + card padding) */
+.shelf-row {
+  padding: 8px 24px 4px 24px;
+}
+.shelf-title {
+  font-size: 1.3em;
+  font-weight: bold;
+}
+label.shelf-heading {
+  margin-left: 30px;
+}
+button.shelf-heading {
+  margin-left: 22px;
+  padding: 2px 8px;
+}
+.shelf-arrow {
+  min-width: 44px;
+  min-height: 44px;
+  margin: 0 12px;
+  opacity: 0;
+  transition: opacity 200ms ease-out;
+}
+.shelf:hover .shelf-arrow {
+  opacity: 1;
+}
+
+/* Header bars over a hero picture: clear at the top, solid once the page
+   scrolls (ui::header_over_hero) */
+headerbar.over-hero {
+  background-color: transparent;
+  box-shadow: none;
+  transition: background-color 200ms ease-out, box-shadow 200ms ease-out;
+}
+headerbar.over-hero.scrolled {
+  background-color: var(--headerbar-bg-color);
+  box-shadow: 0 1px 6px rgb(0 0 0 / 25%);
+}
+
+/* Item page */
+.hero {
+  min-height: 480px;
+}
+/* A light top for the header bar's buttons, fading to the page at the bottom */
+.hero-shade {
+  background-image:
+    linear-gradient(to bottom, color-mix(in srgb, var(--window-bg-color) 60%, transparent), transparent 140px),
+    linear-gradient(to top, var(--window-bg-color), color-mix(in srgb, var(--window-bg-color) 55%, transparent) 55%, color-mix(in srgb, var(--window-bg-color) 15%, transparent));
+}
+.hero-title {
+  font-size: 2.4em;
+  font-weight: 800;
+}
+.tagline {
+  font-style: italic;
+  opacity: 0.8;
+}
+.tech-badge {
+  padding: 1px 7px;
+  border-radius: 5px;
+  border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+  font-size: 0.8em;
+  font-weight: bold;
+  opacity: 0.85;
+}
+/* Below the hero: the backdrop's colours, blurred, coming through the page */
+.wash-scrim {
+  background-image: linear-gradient(to bottom, var(--window-bg-color), color-mix(in srgb, var(--window-bg-color) 80%, transparent) 260px, color-mix(in srgb, var(--window-bg-color) 88%, transparent));
+}
+/* A requested movie's or show's page: its request's and downloads' progress */
+.request-progress trough,
+.request-progress progress {
+  min-height: 6px;
+  border-radius: 3px;
+}
+.download-row {
+  padding: 12px 14px;
+}
+
+/* On the search page: signing in to Seerr to request what isn't there */
+.request-callout {
+  padding: 14px 18px;
+}
+.avatar-art {
+  border-radius: 999px;
+  background-color: alpha(currentColor, 0.08);
+}
+
+/* Home's featured carousel: the picture on the right, text on a shade on the left */
+.featured-shade {
+  background-image:
+    linear-gradient(to bottom, color-mix(in srgb, var(--window-bg-color) 60%, transparent), transparent 140px),
+    linear-gradient(to top, var(--window-bg-color), transparent 45%),
+    linear-gradient(to right, color-mix(in srgb, var(--window-bg-color) 92%, transparent), color-mix(in srgb, var(--window-bg-color) 65%, transparent) 40%, transparent 70%);
+}
+.featured-title {
+  font-size: 2.6em;
+  font-weight: 800;
+}
+.episode-row {
+  padding: 8px;
+  border-radius: 12px;
+}
