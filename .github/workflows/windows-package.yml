@@ -62,7 +62,7 @@ jobs:
           }
           & $vpk pack --packId io.github.joaotroxo.Jelly --packVersion $version --packTitle Jelly `
             --packAuthors "Jelly contributors" --icon data\windows\jelly.ico --packDir target\windows\setup `
-            --mainExe jelly.exe --outputDir $out --noPortable
+            --mainExe jelly.exe --runtime win-x64 --outputDir $out --noPortable
           if ($LASTEXITCODE) { throw "vpk pack failed" }
           # What the release gets: the zip, the setup, and this version's
           # update packages and feed (an earlier one's stay on its release)
@@ -138,7 +138,7 @@ jobs:
           Copy-Item -Recurse target\windows\velopack $feed
           & "$PWD\target\vpk\vpk.exe" pack --packId io.github.joaotroxo.Jelly --packVersion $next --packTitle Jelly `
             --packAuthors "Jelly contributors" --icon data\windows\jelly.ico --packDir target\windows\setup `
-            --mainExe jelly.exe --outputDir $feed --noPortable
+            --mainExe jelly.exe --runtime win-x64 --outputDir $feed --noPortable
           if ($LASTEXITCODE) { throw "vpk pack $next failed" }
           $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
           # The setup starts Jelly once it's installed: with --version, which only prints
