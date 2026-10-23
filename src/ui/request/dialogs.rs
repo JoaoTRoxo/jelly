@@ -223,13 +223,7 @@ fn sign_in_dialog(ctx: &Rc<Ctx>, problem: Option<&str>, url: String, then: Rc<dy
             let Some(ctx) = c.upgrade() else { return };
             match result.unwrap_or_else(|_| Err(seerr::Error::Server("Internal error".into()))) {
                 Ok(client) => {
-                    session::save_seerr(&session::SeerrSession {
-                        url: client.url.clone(),
-                        cookie: client.cookie.clone(),
-                    });
-                    let mut settings = session::settings();
-                    settings.seerr_url = client.url;
-                    session::save_settings(&settings);
+                    keep(client);
                     ctx.toast("Signed in to Seerr");
                     then();
                 }
@@ -239,4 +233,40 @@ fn sign_in_dialog(ctx: &Rc<Ctx>, problem: Option<&str>, url: String, then: Rc<dy
     });
     dialog.present(Some(&ctx.window));
     dialog.set_focus(Some(&password));
+}
+
+/// Right after signing in to Jellyfin with a password, sign in to Seerr with
+/// it too: at Seerr's last address, or wherever it's found next to the
+/// Jellyfin server. Quietly, as there may be no Seerr; if this doesn't work,
+/// the search page asks later.
+pub fn sign_in_too(ctx: &Rc<Ctx>, server: String, user: String, password: String) {
+    let saved = Some(session::settings().seerr_url).filter(|u| !u.is_empty());
+    let c = Rc::downgrade(ctx);
+    glib::spawn_future_local(async move {
+        let result = gio::spawn_blocking(move || {
+            let url = saved.or_else(|| seerr::find(&server))?;
+            Some(seerr::sign_in(&url, &user, &password))
+        })
+        .await;
+        let Some(ctx) = c.upgrade() else { return };
+        match result {
+            Ok(Some(Ok(client))) => {
+                keep(client);
+                ctx.toast("Signed in to Seerr too");
+            }
+            Ok(Some(Err(e))) => eprintln!("couldn't sign in to Seerr: {e}"),
+            _ => {}
+        }
+    });
+}
+
+/// Save Seerr's session, and its address for next time
+fn keep(client: seerr::Client) {
+    session::save_seerr(&session::SeerrSession {
+        url: client.url.clone(),
+        cookie: client.cookie,
+    });
+    let mut settings = session::settings();
+    settings.seerr_url = client.url;
+    session::save_settings(&settings);
 }

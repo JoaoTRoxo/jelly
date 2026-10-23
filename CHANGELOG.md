@@ -11,6 +11,8 @@ All notable changes to Jelly are recorded here. The format follows
 - Tab completion in bash, zsh and fish, for the commands and for the movies
   and shows on your server in `play` and `open`. `install.sh` and the Linux
   tarball include it, and `jelly completions SHELL` prints it.
+- Signing in with a password signs in to Seerr too, with the same account,
+  when Jelly finds Seerr next to the Jellyfin server.
 
 ### Fixed
 

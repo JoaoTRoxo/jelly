@@ -109,8 +109,9 @@ card shows for the last 30 s.
 
 What the search finds through Seerr that isn't in the library shows under
 the library's results: click a movie to request it, or a show to pick its
-seasons. Sign in to Seerr there with your Jellyfin password, once; Jelly keeps
-Seerr's session, not the password. It looks for Seerr at `requests.`,
+seasons. Signing in to Jelly with your password signs in to Seerr too, if
+it's found; otherwise sign in there with your Jellyfin password, once. Jelly
+keeps Seerr's session, not the password. It looks for Seerr at `requests.`,
 `request.`, `seerr.`, `jellyseerr.` or `overseerr.` on your server's domain,
 then on the Jellyfin machine at port 5055, and the sign-in dialog can change
 that.

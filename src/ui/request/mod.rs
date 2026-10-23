@@ -9,7 +9,7 @@ mod page;
 mod search;
 mod underway;
 
-pub use dialogs::sign_in;
+pub use dialogs::{sign_in, sign_in_too};
 pub use page::page;
 pub use search::Section;
 pub use underway::underway;
