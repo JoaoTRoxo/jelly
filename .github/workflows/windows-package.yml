@@ -1,6 +1,7 @@
 # The Windows zip, built with MSYS2's UCRT64 packages, then started outside
 # MSYS2 (with only Windows' own DLLs on the PATH) to check that nothing it
-# needs is missing, and made to play a video with styled subtitles. Called
+# needs is missing, and made to play a video with styled subtitles; and the
+# setup, with Velopack's update packages, installed and then updated. Called
 # by CI and Release.
 name: Windows package
 
@@ -46,6 +47,31 @@ jobs:
         run: cargo build --release --locked
       - name: Make the folder and its zip
         run: tools/windows-bundle.sh
+      - name: Make the setup and its update packages
+        shell: pwsh
+        run: |
+          dotnet tool install vpk --version 1.3.39-g8d2844f --tool-path target\vpk
+          $vpk = "$PWD\target\vpk\vpk.exe"
+          $version = (Select-String -Path Cargo.toml -Pattern '^version = "(.*)"$').Matches[0].Groups[1].Value
+          $out = "target\windows\velopack"
+          # A release's update can be a delta from the release before, which vpk
+          # needs at hand (none before the first release with updates)
+          if ($env:GITHUB_REF -like "refs/tags/v*") {
+            & $vpk download github --repoUrl "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY" --outputDir $out
+            if ($LASTEXITCODE) { Write-Host "No release before to make a delta from" }
+          }
+          & $vpk pack --packId io.github.joaotroxo.Jelly --packVersion $version --packTitle Jelly `
+            --packAuthors "Jelly contributors" --icon data\windows\jelly.ico --packDir target\windows\setup `
+            --mainExe jelly.exe --runtime win-x64 --outputDir $out --noPortable
+          if ($LASTEXITCODE) { throw "vpk pack failed" }
+          # What the release gets: the zip, the setup, and this version's
+          # update packages and feed (an earlier one's stay on its release)
+          $publish = New-Item -ItemType Directory target\windows\publish
+          Copy-Item target\windows\jelly-$version-windows-x86_64.zip $publish
+          Copy-Item (Get-ChildItem $out -Filter *-Setup.exe).FullName "$publish\jelly-windows-setup.exe"
+          Get-ChildItem $out -File | Where-Object { $_.Name -like "*-$version-*.nupkg" -or $_.Name -in "releases.win.json", "assets.win.json", "RELEASES" } |
+            Copy-Item -Destination $publish
+          Get-ChildItem $out, $publish
       - name: Prepare a copy that plays video
         run: |
           smoke=target/windows-smoke
@@ -100,14 +126,49 @@ jobs:
           $version = (& target\windows\Jelly\jelly.exe --version | Out-String).Trim()
           $expected = "jelly " + (Select-String -Path Cargo.toml -Pattern '^version = "(.*)"$').Matches[0].Groups[1].Value
           if ($version -ne $expected) { throw "jelly.exe --version said '$version', not '$expected'" }
-      - name: Upload the zip
+      - name: Install the setup, and update it
+        shell: pwsh
+        run: |
+          $version = (Select-String -Path Cargo.toml -Pattern '^version = "(.*)"$').Matches[0].Groups[1].Value
+          $smoke = "$PWD\target\windows-smoke"
+          # The next version (the same files), in a folder standing in for GitHub
+          $v = [version]$version
+          $next = "$($v.Major).$($v.Minor).$($v.Build + 1)"
+          $feed = "$PWD\target\windows\update-feed"
+          Copy-Item -Recurse target\windows\velopack $feed
+          & "$PWD\target\vpk\vpk.exe" pack --packId io.github.joaotroxo.Jelly --packVersion $next --packTitle Jelly `
+            --packAuthors "Jelly contributors" --icon data\windows\jelly.ico --packDir target\windows\setup `
+            --mainExe jelly.exe --runtime win-x64 --outputDir $feed --noPortable
+          if ($LASTEXITCODE) { throw "vpk pack $next failed" }
+          $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+          # The setup starts Jelly once it's installed: with --version, which only prints
+          Start-Process target\windows\publish\jelly-windows-setup.exe -Wait `
+            -ArgumentList "--silent", "--log", "$smoke\setup.log", "--", "--version"
+          $root = "$env:LOCALAPPDATA\io.github.joaotroxo.Jelly"
+          $installed = (& "$root\current\jelly.exe" --version | Out-String).Trim()
+          if ($installed -ne "jelly $version") { throw "the installed jelly.exe said '$installed', not 'jelly $version'" }
+          # Jelly downloads the next version in the background...
+          $env:JELLY_UPDATE_FEED = $feed
+          $app = Start-Process "$root\current\jelly.exe" -PassThru `
+            -RedirectStandardOutput "$smoke\update.out.txt" -RedirectStandardError "$smoke\update.err.txt"
+          $downloaded = { Get-ChildItem "$root\packages" -Filter "*$next-full.nupkg" -ErrorAction SilentlyContinue }
+          for ($i = 0; $i -lt 90 -and -not (& $downloaded); $i++) { Start-Sleep 1 }
+          Stop-Process $app -ErrorAction SilentlyContinue
+          if (-not (& $downloaded)) { Get-Content "$smoke\update.err.txt"; throw "Jelly didn't download $next" }
+          # ...and the next time it starts, it's that version
+          Start-Process "$root\current\jelly.exe"
+          $updated = { Select-String -Quiet -SimpleMatch $next -Path "$root\current\sq.version" -ErrorAction SilentlyContinue }
+          for ($i = 0; $i -lt 90 -and -not (& $updated); $i++) { Start-Sleep 1 }
+          Get-Process jelly -ErrorAction SilentlyContinue | Stop-Process
+          if (-not (& $updated)) { throw "Jelly didn't update to $next" }
+      - name: Upload the packages
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: windows-package
-          path: target/windows/jelly-*-windows-x86_64.zip
+          path: target/windows/publish/*
           if-no-files-found: error
           retention-days: 7
-          # Already a zip
+          # Zips and nupkgs already
           compression-level: 0
       - name: Upload what the start looked like
         if: always()
@@ -117,4 +178,5 @@ jobs:
           path: |
             target/windows-smoke/*.png
             target/windows-smoke/*.txt
+            target/windows-smoke/*.log
           retention-days: 7

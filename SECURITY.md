@@ -22,7 +22,13 @@ Only the latest release is supported.
 - Jelly sends the token only to the Jellyfin server you signed in to (in an
   `Authorization` header, and to mpv for its requests to that server), and
   Seerr's cookie only to Seerr. Posters from TMDB, for Seerr, are fetched
-  without either.
+  without either, and so is Jelly's latest release, from GitHub, when it
+  starts.
+- **Updates**: Jelly installed with the Windows setup downloads new releases
+  from this repository's GitHub releases and installs them (through
+  [Velopack](https://velopack.io)), checking each package against the
+  SHA-256 in the release's feed. Releases aren't signed, so updates are as
+  trustworthy as this repository's releases.
 - HTTPS certificates are always checked: Jelly's own requests against the
   Mozilla root certificates built into it, and mpv's against the system's.
   An address typed without `https://` gets HTTPS unless it looks like a

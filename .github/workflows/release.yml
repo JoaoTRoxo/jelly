@@ -1,6 +1,7 @@
 # Pushing a vX.Y.Z tag publishes that release: once its version agrees
-# everywhere and the checks pass, the Linux tarball and the Windows zip are
-# built, checksummed and published with CHANGELOG.md's notes. Running it by
+# everywhere and the checks pass, the Linux tarball, the Windows zip and the
+# Windows setup with its update packages (which installed copies update
+# from) are built, checksummed and published with CHANGELOG.md's notes. Running it by
 # hand builds the packages without publishing anything.
 name: Release
 
@@ -80,7 +81,8 @@ jobs:
       - name: Checksum them
         working-directory: release
         run: |
-          sha256sum jelly-* > SHA256SUMS
+          find . -maxdepth 1 -type f ! -name notes.md -printf '%P\n' | sort > "$RUNNER_TEMP/assets.txt"
+          xargs sha256sum < "$RUNNER_TEMP/assets.txt" > SHA256SUMS
           cat SHA256SUMS
           printf '\n### Checksums\n\n```text\n%s\n```\n' "$(cat SHA256SUMS)" >> notes.md
       - name: Publish the release
@@ -90,7 +92,8 @@ jobs:
           GH_REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
         run: |
+          # One name a line, none with spaces
           gh release create "$TAG" --verify-tag --draft \
             --title "Jelly ${TAG#v}" --notes-file notes.md \
-            jelly-* SHA256SUMS
+            $(cat "$RUNNER_TEMP/assets.txt") SHA256SUMS
           gh release edit "$TAG" --draft=false --latest
