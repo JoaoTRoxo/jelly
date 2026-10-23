@@ -6,6 +6,8 @@ All notable changes to Jelly are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-23
+
 ### Added
 
 - Tab completion in bash, zsh and fish, for the commands and for the movies
@@ -14,17 +16,17 @@ All notable changes to Jelly are recorded here. The format follows
 - Signing in with a password signs in to Seerr too, with the same account,
   when Jelly finds Seerr next to the Jellyfin server.
 
-### Fixed
-
-- The Windows release no longer includes Mesa's `opengl32.dll`, which Windows
-  used in place of the graphics card's own OpenGL driver (rendering through
-  Direct3D 12 instead), and the 175 MB of Mesa and LLVM it brought along.
-
 ### Changed
 
 - The Windows folder no longer shows a few hundred DLLs: the app and its
   libraries moved into `runtime`, and the `jelly.exe` next to it starts the
   app, with the same command line.
+
+### Fixed
+
+- The Windows release no longer includes Mesa's `opengl32.dll`, which Windows
+  used in place of the graphics card's own OpenGL driver (rendering through
+  Direct3D 12 instead), and the 175 MB of Mesa and LLVM it brought along.
 
 ## [0.1.0] - 2026-10-23
 
@@ -53,5 +55,6 @@ The first release.
 - Releases for Linux (a tarball that uses the system's GTK, libadwaita and
   libmpv) and Windows (a folder that runs without installing anything).
 
-[Unreleased]: https://github.com/JoaoTRoxo/jelly/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/JoaoTRoxo/jelly/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/JoaoTRoxo/jelly/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/JoaoTRoxo/jelly/releases/tag/v0.1.0

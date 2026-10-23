@@ -66,6 +66,15 @@
   </branding>
 
   <releases>
+    <release version="0.2.0" date="2026-10-23">
+      <description>
+        <ul>
+          <li>Tab completion in bash, zsh and fish, including the movies and shows on your server</li>
+          <li>Signing in with a password signs in to Seerr too</li>
+          <li>Windows: the folder shows only jelly.exe and a runtime folder, and the app uses the graphics card's own OpenGL driver instead of Mesa's</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.1.0" date="2026-10-23">
       <description>
         <p>The first release.</p>
