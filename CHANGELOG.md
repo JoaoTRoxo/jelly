@@ -6,6 +6,15 @@ All notable changes to Jelly are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- A Windows setup, `jelly-windows-setup.exe`, that installs Jelly for the
+  user alone, with shortcuts, and keeps it up to date: a new release
+  downloads in the background and starts the next time Jelly does (or right
+  away, from the notice).
+- Everywhere else (Linux, the Windows zip), Jelly says when there's a new
+  release, with a link to it.
+
 ## [0.2.0] - 2026-10-23
 
 ### Added

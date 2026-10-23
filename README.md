@@ -64,16 +64,25 @@ sudo apt install cargo libgtk-4-dev libadwaita-1-dev libmpv-dev    # Debian, Ubu
 ```
 
 Either `install.sh` installs elsewhere with `PREFIX=DIR`, and updates Jelly
-when run again.
+when run again. Jelly says when there's a new release.
 
 ### Windows
 
-Download `jelly-*-windows-x86_64.zip` from a
+Download
+[`jelly-windows-setup.exe`](https://github.com/JoaoTRoxo/jelly/releases/latest/download/jelly-windows-setup.exe)
+and run it. It installs Jelly for you alone (no administrator needed), with
+a Start menu and desktop shortcut, and from then on Jelly keeps itself up to
+date: a new release downloads in the background and starts the next time you
+open Jelly. Uninstall it from Settings → Apps.
+
+Or, without installing, download `jelly-*-windows-x86_64.zip` from a
 [release](https://github.com/JoaoTRoxo/jelly/releases), unzip it anywhere and
-run `Jelly\jelly.exe`. Nothing needs installing, but keep it in its folder:
-it starts the app in `runtime`, next to it, which has the libraries it needs.
-Windows warns about it the first time, as it isn't signed: choose More info,
-then Run anyway.
+run `Jelly\jelly.exe`. Keep it in its folder: it starts the app in `runtime`,
+next to it, which has the libraries it needs. That copy doesn't update
+itself, but says when there's a new release.
+
+Windows warns about either the first time, as Jelly isn't signed: choose
+More info, then Run anyway.
 
 ### macOS
 
@@ -162,7 +171,11 @@ give the shortcut the full path, such as `/home/you/.local/bin/jelly continue`:
 - `~/.cache/jelly/images`: the poster cache
 
 On Windows the first four are in `%LOCALAPPDATA%\jelly`, and the poster cache
-in `%LOCALAPPDATA%\Microsoft\Windows\INetCache\jelly`.
+in `%LOCALAPPDATA%\Microsoft\Windows\INetCache\jelly`. The setup installs
+Jelly itself in `%LOCALAPPDATA%\io.github.joaotroxo.Jelly`.
+
+When it starts, Jelly asks GitHub for its latest release, to update or to say
+there's a new one.
 
 ## Troubleshooting
 

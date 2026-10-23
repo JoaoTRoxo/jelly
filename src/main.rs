@@ -16,6 +16,7 @@ mod session;
 #[cfg(feature = "screenshot")]
 mod shot;
 mod ui;
+mod update;
 
 use adw::prelude::*;
 use gtk::{gdk, gio, glib};
@@ -29,6 +30,11 @@ thread_local! {
 }
 
 fn main() -> glib::ExitCode {
+    // Installed with the Windows setup: Velopack's steps when installing,
+    // updating and uninstalling (which exit), and an update that was
+    // downloaded applied before Jelly starts
+    #[cfg(windows)]
+    velopack::VelopackApp::build().run();
     #[cfg(windows)]
     if connect_output() && std::env::var_os("JELLY_MPV_LOG").is_none() {
         // SAFETY: no other thread is running yet to read the environment
@@ -160,6 +166,10 @@ fn window(app: &adw::Application, sign_in: bool) -> Rc<ui::Ctx> {
     ctx.window.present();
     #[cfg(feature = "screenshot")]
     shot::schedule(&ctx.window);
+    // Not while making screenshots, which a toast would cover
+    if !cfg!(feature = "screenshot") {
+        update::check(&ctx);
+    }
     CTX.with(|c| *c.borrow_mut() = Some(ctx.clone()));
     ctx
 }

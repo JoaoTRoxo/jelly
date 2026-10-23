@@ -34,12 +34,20 @@ cargo build --release
 tools/windows-bundle.sh        # target/windows/Jelly, which runs outside MSYS2
 ```
 
+The setup is made from `target/windows/setup` with Velopack's `vpk pack`, as
+in the [Windows package workflow](.github/workflows/windows-package.yml),
+which also installs it and updates it. An installed Jelly takes its updates
+from GitHub's releases, or from `JELLY_UPDATE_FEED` (a folder or address
+with a `releases.win.json`) for testing.
+
 ## The code
 
 - `src/api.rs`: the Jellyfin API client (blocking; the UI calls it off the
   main thread through `ui::run`)
 - `src/seerr.rs`: the Seerr client
 - `src/mpv.rs`: the libmpv bindings, its client API and its OpenGL render API
+- `src/update.rs`: updating the Windows setup's Jelly (through Velopack),
+  and saying there's a new release anywhere else
 - `src/cli.rs`: the command line, and `src/completion.rs` its completion in
   bash, zsh and fish (the scripts, in `data/completions/`, ask
   `jelly __complete` what comes next)
@@ -98,9 +106,10 @@ the app and try it; say in the pull request what you tried, and on what
    ```
 
 3. The [Release workflow](.github/workflows/release.yml) checks the version
-   again, runs the checks, builds the Linux tarball and the Windows zip,
-   starts them, and publishes them with their SHA-256 checksums and the
-   changelog's notes. Running the workflow by hand builds the packages
+   again, runs the checks, builds the Linux tarball, the Windows zip and the
+   Windows setup with its update packages, starts them, and publishes them
+   with their SHA-256 checksums and the changelog's notes. Installed copies
+   of Jelly then update to it. Running the workflow by hand builds the packages
    without publishing.
 
 ## License

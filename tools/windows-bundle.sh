@@ -3,8 +3,10 @@
 # 64-bit Windows 10 or 11 without installing anything, and
 # target/windows/jelly-VERSION-windows-x86_64.zip of it. Its jelly.exe starts
 # the app in runtime\bin, next to every DLL it loads; the data GTK looks for
-# is in runtime too, and the licenses of all that in licenses. Run it in an
-# MSYS2 UCRT64 shell after cargo build --release.
+# is in runtime too, and the licenses of all that in licenses. Also
+# target/windows/setup, the same for the setup to install (vpk pack, in the
+# Windows package workflow). Run it in an MSYS2 UCRT64 shell after cargo
+# build --release.
 #
 #   pacman -S zip mingw-w64-ucrt-x86_64-{ntldd,librsvg,webp-pixbuf-loader}
 #   tools/windows-bundle.sh
@@ -92,4 +94,11 @@ https://github.com/JoaoTRoxo/jelly
 EOF
 
 (cd target/windows && zip -qr "jelly-$version-windows-x86_64.zip" Jelly)
+
+# What the setup installs: the same with the app on top, as Velopack starts
+# it by name (and the installed folder isn't one people open)
+setup=target/windows/setup
+mkdir "$setup"
+cp -r "$runtime/bin/." "$setup/"
+cp -r "$runtime/lib" "$runtime/share" "$runtime/etc" "$out/licenses" "$out/LICENSE.txt" "$setup/"
 echo "target/windows/jelly-$version-windows-x86_64.zip: $(du -sh "$out" | cut -f1) unzipped"
