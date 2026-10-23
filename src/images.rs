@@ -2,12 +2,13 @@
 //! disk (image URLs carry the image's tag, so a changed image gets a new URL)
 //! and, for the most recent ones, in memory.
 
-use crate::api;
+use crate::{api, http};
 use adw::prelude::*;
 use gtk::{gdk, gio, glib};
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 use std::time::SystemTime;
 
 const MEMORY_ENTRIES: usize = 150;
@@ -107,14 +108,13 @@ pub fn set(picture: &gtk::Picture, client: &api::Client, url: String) {
 /// Like `set`, for an image from elsewhere (TMDB's posters, for Seerr): fetched
 /// without the server's sign-in, which mustn't go anywhere else
 pub fn set_public(picture: &gtk::Picture, url: String) {
+    static AGENT: LazyLock<ureq::Agent> = LazyLock::new(|| http::agent(None));
     show(picture, url, |url| {
-        let resp = ureq::get(url)
-            .timeout(std::time::Duration::from_secs(30))
-            .call()
-            .ok()?;
-        let mut bytes = Vec::new();
-        std::io::Read::read_to_end(&mut resp.into_reader(), &mut bytes).ok()?;
-        Some(bytes)
+        let response = AGENT.get(url).call().ok()?;
+        if !response.status().is_success() {
+            return None;
+        }
+        http::read_image(response).ok()
     });
 }
 
