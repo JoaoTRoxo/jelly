@@ -1,0 +1,96 @@
+# Pushing a vX.Y.Z tag publishes that release: once its version agrees
+# everywhere and the checks pass, the Linux tarball and the Windows zip are
+# built, checksummed and published with CHANGELOG.md's notes. Running it by
+# hand builds the packages without publishing anything.
+name: Release
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify the version
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Check the tag, Cargo.toml, CHANGELOG.md and the AppStream metadata
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            tag=$GITHUB_REF_NAME
+            # An annotated tag, on main
+            test "$(git cat-file -t "$tag")" = tag
+            git fetch --no-tags origin main
+            git merge-base --is-ancestor "$tag^{}" origin/main
+          else
+            tag=v$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n 1)
+          fi
+          tools/release-check.sh "$tag" > notes.md
+          echo "TAG=$tag" >> "$GITHUB_ENV"
+      - name: Upload the release notes
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-notes
+          path: notes.md
+          if-no-files-found: error
+          retention-days: 7
+
+  checks:
+    name: Checks
+    needs: verify
+    uses: ./.github/workflows/checks.yml
+
+  linux:
+    name: Linux package
+    needs: checks
+    uses: ./.github/workflows/linux-package.yml
+
+  windows:
+    name: Windows package
+    needs: checks
+    uses: ./.github/workflows/windows-package.yml
+
+  publish:
+    name: Publish
+    if: github.event_name == 'push'
+    needs: [linux, windows]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Download the packages and notes
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: "{linux-package,windows-package,release-notes}"
+          merge-multiple: true
+          path: release
+      - name: Checksum them
+        working-directory: release
+        run: |
+          sha256sum jelly-* > SHA256SUMS
+          cat SHA256SUMS
+          printf '\n### Checksums\n\n```text\n%s\n```\n' "$(cat SHA256SUMS)" >> notes.md
+      - name: Publish the release
+        working-directory: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" --verify-tag --draft \
+            --title "Jelly ${TAG#v}" --notes-file notes.md \
+            jelly-* SHA256SUMS
+          gh release edit "$TAG" --draft=false --latest

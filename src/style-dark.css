@@ -1,0 +1,10 @@
+/* Added over style.css in dark mode: the icon's deep plum for the background */
+:root {
+  --window-bg-color: #15111c;
+  --view-bg-color: #15111c;
+  --headerbar-bg-color: #15111c;
+  --headerbar-backdrop-color: #15111c;
+  --popover-bg-color: #262030;
+  --dialog-bg-color: #262030;
+  --thumbnail-bg-color: #2b2236;
+}

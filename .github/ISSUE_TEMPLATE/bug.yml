@@ -1,0 +1,52 @@
+name: Bug report
+description: Something in Jelly doesn't work as it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Thanks for reporting it. Please leave out anything private: access
+        tokens, passwords, and your server's address if you'd rather not
+        share it.
+  - type: input
+    id: version
+    attributes:
+      label: Jelly version
+      description: What `jelly --version` prints, or the commit you built.
+      placeholder: jelly 0.1.0
+    validations:
+      required: true
+  - type: textarea
+    id: system
+    attributes:
+      label: System
+      description: >-
+        Linux distribution or Windows version, desktop (GNOME, Plasma…) and
+        Wayland or X11, GPU, and the Jellyfin server's version.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: What you did
+      description: The steps that show the problem, numbered.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened instead
+      description: >-
+        For playback problems, run Jelly with `JELLY_MPV_LOG=all=v` and
+        include the end of its output. On Windows, include
+        `%LOCALAPPDATA%\jelly\jelly.log`, and for a crash the "Application
+        Error" entry in Event Viewer (Windows Logs → Application), which
+        says what crashed. Screenshots help too.
+    validations:
+      required: true

@@ -1,0 +1,21 @@
+name: Idea
+description: Something Jelly could do, or do better.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you'd like to do
+      description: What you're trying to do, and what gets in the way today.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: How Jelly could help
+      description: What you have in mind, and anything you've seen elsewhere that works well.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Other ways around it
+      description: What you've tried or considered instead.
