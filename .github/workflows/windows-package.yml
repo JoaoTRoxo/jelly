@@ -36,7 +36,6 @@ jobs:
             mingw-w64-ucrt-x86_64-ntldd
             mingw-w64-ucrt-x86_64-librsvg
             mingw-w64-ucrt-x86_64-webp-pixbuf-loader
-            mingw-w64-ucrt-x86_64-mesa
       - name: Restore the build cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -53,7 +52,9 @@ jobs:
           mkdir -p $smoke
           cp -r target/windows/Jelly $smoke/app
           # The runner has no GPU: Mesa's software OpenGL (llvmpipe) in place
-          # of Windows' OpenGL 1.1, next to the app in this copy only
+          # of Windows' OpenGL 1.1, next to the app in this copy only. Not
+          # installed before the zip is made, or the zip would take it too
+          pacman -S --noconfirm --needed mingw-w64-ucrt-x86_64-mesa
           bin=$smoke/app/runtime/bin
           for f in opengl32.dll libgallium_wgl.dll; do cp "$MINGW_PREFIX/bin/$f" $bin; ntldd -R "$MINGW_PREFIX/bin/$f"; done \
             | tr '\\' / | grep -io "[^ ]*/${MINGW_PREFIX#/}/bin/[^ ]*\.dll" | sort -fu \

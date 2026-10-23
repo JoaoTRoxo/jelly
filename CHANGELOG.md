@@ -6,6 +6,12 @@ All notable changes to Jelly are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- The Windows release no longer includes Mesa's `opengl32.dll`, which Windows
+  used in place of the graphics card's own OpenGL driver (rendering through
+  Direct3D 12 instead), and the 175 MB of Mesa and LLVM it brought along.
+
 ### Changed
 
 - The Windows folder no longer shows a few hundred DLLs: the app and its

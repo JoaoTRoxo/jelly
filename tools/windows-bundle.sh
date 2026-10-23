@@ -53,6 +53,14 @@ find "$runtime" -name '*.exe' -o -name '*.dll' | while read -r f; do ntldd -R "$
         cygpath -u "$dll" >> "$sources"
     done
 
+# OpenGL has to be Windows' own, which loads the graphics card's driver: with
+# MSYS2's Mesa installed, its opengl32.dll (emulating OpenGL on Direct3D 12 or
+# the CPU, with 150 MB of LLVM) would be taken in its place
+if [ -e "$runtime/bin/opengl32.dll" ]; then
+    echo "The DLLs include Mesa's opengl32.dll: pacman -R mingw-w64-ucrt-x86_64-mesa, then run this again" >&2
+    exit 1
+fi
+
 # The licenses of the MSYS2 packages all that came from, and where their
 # source code is
 mkdir "$out/licenses"
