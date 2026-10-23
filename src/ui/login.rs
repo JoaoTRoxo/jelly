@@ -157,6 +157,7 @@ pub fn page(ctx: &Rc<Ctx>) -> adw::NavigationPage {
             show("", false);
             let (weak, busy, show) = (Rc::downgrade(&ctx), busy.clone(), show.clone());
             let server_url = client.server.clone();
+            let secret = pass.clone();
             glib::spawn_future_local(async move {
                 let result = gio::spawn_blocking(move || {
                     client
@@ -168,12 +169,15 @@ pub fn page(ctx: &Rc<Ctx>) -> adw::NavigationPage {
                 match result {
                     Ok(Ok(auth)) => {
                         if let Some(ctx) = weak.upgrade() {
+                            let name = auth.user.name.clone();
                             ctx.sign_in(session::Session {
-                                server: server_url,
+                                server: server_url.clone(),
                                 user_id: auth.user.id,
                                 user_name: auth.user.name,
                                 token: auth.access_token,
                             });
+                            // Seerr signs in with the same account
+                            super::request::sign_in_too(&ctx, server_url, name, secret);
                         }
                     }
                     Ok(Err(api::Error::Unauthorized)) => show("Wrong username or password", true),

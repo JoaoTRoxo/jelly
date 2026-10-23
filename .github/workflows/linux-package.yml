@@ -66,3 +66,6 @@ jobs:
           test "$("$RUNNER_TEMP/prefix/bin/jelly" --version)" = "jelly ${version%-linux-*}"
           test -f "$RUNNER_TEMP/prefix/share/applications/io.github.joaotroxo.Jelly.desktop"
           test -f "$RUNNER_TEMP/prefix/share/metainfo/io.github.joaotroxo.Jelly.metainfo.xml"
+          test -f "$RUNNER_TEMP/prefix/share/bash-completion/completions/jelly"
+          test -f "$RUNNER_TEMP/prefix/share/zsh/site-functions/_jelly"
+          test -f "$RUNNER_TEMP/prefix/share/fish/vendor_completions.d/jelly.fish"

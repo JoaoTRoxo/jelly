@@ -2,7 +2,7 @@
 //! act in the app's window (the running app's, when there is one), so they
 //! suit keybindings and launchers.
 
-use crate::{api, seerr, session, ui};
+use crate::{api, completion, seerr, session, ui};
 use gtk::glib;
 use serde_json::{Value, json};
 use std::io::Write;
@@ -23,6 +23,7 @@ Without a command, opens the window. Commands:
   list latest        List what's new
   list requests      List what's been requested through Seerr and isn't in
                      the library yet, and how its download is going
+  completions SHELL  Print the completion script for bash, zsh or fish
   help               Show this
   version            Show Jelly's version
 
@@ -45,6 +46,10 @@ pub enum Command {
         what: List,
         json: bool,
     },
+    /// A shell's completion script
+    Completions(String),
+    /// What can come next on a command line (for the completion scripts)
+    Complete(Vec<String>),
     Help,
     Version,
 }
@@ -59,6 +64,10 @@ pub enum List {
 
 /// `args`: without the program's name
 pub fn parse(args: &[String]) -> Result<Command, String> {
+    // As typed, --json and all
+    if let Some(("__complete", words)) = args.split_first().map(|(a, w)| (a.as_str(), w)) {
+        return Ok(Command::Complete(words.to_vec()));
+    }
     let json = args.iter().any(|a| a == "--json");
     let words: Vec<&str> = args
         .iter()
@@ -74,6 +83,12 @@ pub fn parse(args: &[String]) -> Result<Command, String> {
         ["play", query @ ..] if !query.is_empty() => Ok(Command::Play(rest(query))),
         ["open", query @ ..] if !query.is_empty() => Ok(Command::Open(rest(query))),
         ["--play", file] => Ok(Command::PlayFile(file.to_string())),
+        ["completions", shell] => match completion::script(shell) {
+            Some(_) => Ok(Command::Completions(shell.to_string())),
+            None => Err(format!(
+                "Can't complete for “{shell}”: try bash, zsh or fish"
+            )),
+        },
         ["search", text @ ..] if !text.is_empty() => Ok(Command::Search {
             text: rest(text),
             json,
@@ -107,6 +122,15 @@ pub fn print(command: &Command) -> Option<glib::ExitCode> {
             let _ = writeln!(std::io::stdout(), "jelly {}", env!("CARGO_PKG_VERSION"));
             Ok(())
         }
+        Command::Completions(shell) => {
+            let script = completion::script(shell).unwrap_or_default();
+            let _ = write!(std::io::stdout(), "{script}");
+            Ok(())
+        }
+        Command::Complete(words) => {
+            completion::print(words);
+            Ok(())
+        }
         Command::Search { text, json } => client()
             .and_then(|c| c.search(text).map_err(|e| e.to_string()))
             .map(|items| output(&items, *json)),
@@ -129,7 +153,7 @@ pub fn print(command: &Command) -> Option<glib::ExitCode> {
 }
 
 /// A client with the app's saved sign-in
-fn client() -> Result<api::Client, String> {
+pub fn client() -> Result<api::Client, String> {
     let s =
         session::load().ok_or_else(|| "Not signed in: open Jelly and sign in first".to_string())?;
     Ok(api::Client::new(&s.server, &session::device_id()).signed_in(&s.token, &s.user_id))
@@ -313,6 +337,8 @@ pub fn act(ctx: &Rc<ui::Ctx>, command: Command, done: impl FnOnce(Result<(), Str
             done(Ok(()));
         }
         Command::Window
+        | Command::Completions(_)
+        | Command::Complete(_)
         | Command::Help
         | Command::Version
         | Command::Search { .. }
@@ -423,6 +449,13 @@ mod tests {
             Ok(Command::Search { json: false, .. })
         ));
         assert!(parse(&args("list everything")).is_err());
+        assert!(
+            matches!(parse(&args("completions zsh")), Ok(Command::Completions(s)) if s == "zsh")
+        );
+        assert!(parse(&args("completions tcsh")).is_err());
+        assert!(
+            matches!(parse(&args("__complete list latest --json")), Ok(Command::Complete(w)) if w.len() == 3)
+        );
         assert!(parse(&args("play")).is_err());
         assert!(parse(&args("dance")).is_err());
     }

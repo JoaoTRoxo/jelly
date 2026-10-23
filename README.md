@@ -70,9 +70,10 @@ when run again.
 
 Download `jelly-*-windows-x86_64.zip` from a
 [release](https://github.com/JoaoTRoxo/jelly/releases), unzip it anywhere and
-run `Jelly\jelly.exe`. Nothing needs installing, but the files next to it
-have to stay there. Windows warns about it the first time, as it isn't signed:
-choose More info, then Run anyway.
+run `Jelly\jelly.exe`. Nothing needs installing, but keep it in its folder:
+it starts the app in `runtime`, next to it, which has the libraries it needs.
+Windows warns about it the first time, as it isn't signed: choose More info,
+then Run anyway.
 
 ### macOS
 
@@ -108,8 +109,9 @@ card shows for the last 30 s.
 
 What the search finds through Seerr that isn't in the library shows under
 the library's results: click a movie to request it, or a show to pick its
-seasons. Sign in to Seerr there with your Jellyfin password, once; Jelly keeps
-Seerr's session, not the password. It looks for Seerr at `requests.`,
+seasons. Signing in to Jelly with your password signs in to Seerr too, if
+it's found; otherwise sign in there with your Jellyfin password, once. Jelly
+keeps Seerr's session, not the password. It looks for Seerr at `requests.`,
 `request.`, `seerr.`, `jellyseerr.` or `overseerr.` on your server's domain,
 then on the Jellyfin machine at port 5055, and the sign-in dialog can change
 that.
@@ -131,6 +133,14 @@ jelly search frieren      # "description<TAB>ID" lines
 jelly list continue       # also next-up, latest; --json for scripts
 jelly list requests       # what's on its way through Seerr, and how far along
 ```
+
+Tab completes the commands, and in `play` and `open` the movies and shows
+on your server (`jelly play fri` Tab → `jelly play Frieren: Beyond Journey's
+End`; with nothing typed, what you're watching). `install.sh` sets it up for
+bash and fish; for zsh, add `fpath+=(~/.local/share/zsh/site-functions)` to
+`~/.zshrc` before `compinit`. Or load it from the shell's startup file:
+`source <(jelly completions bash)` or `zsh`, or `jelly completions fish |
+source`.
 
 `continue`, `play` and `open` use the window that's open, if there is one
 (on Windows, they open a window of their own); `search` and `list` print. A
