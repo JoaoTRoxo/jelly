@@ -66,6 +66,14 @@
   </branding>
 
   <releases>
+    <release version="0.3.0" date="2026-10-23">
+      <description>
+        <ul>
+          <li>Windows: a setup that installs Jelly and keeps it up to date</li>
+          <li>Jelly says when there's a new release</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.2.0" date="2026-10-23">
       <description>
         <ul>
