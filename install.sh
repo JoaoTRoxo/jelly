@@ -38,9 +38,7 @@ gtk-update-icon-cache -qtf "$prefix/share/icons/hicolor" 2>/dev/null || true
 update-desktop-database -q "$prefix/share/applications" 2>/dev/null || true
 echo "Installed $prefix/bin/jelly"
 # bash and fish look in ~/.local/share by themselves; zsh doesn't
-case $prefix in
-/usr | /usr/local) ;;
-*) if [ "${SHELL##*/}" = zsh ]; then
-    echo "For completion in zsh, add fpath+=($prefix/share/zsh/site-functions) to ~/.zshrc, before compinit"
-fi ;;
+case $prefix:${SHELL:-} in
+/usr:* | /usr/local:*) ;;
+*/zsh) echo "For completion in zsh, add fpath+=($prefix/share/zsh/site-functions) to ~/.zshrc, before compinit" ;;
 esac
