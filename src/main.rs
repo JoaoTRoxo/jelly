@@ -7,6 +7,7 @@
 
 mod api;
 mod cli;
+mod http;
 mod images;
 mod mpv;
 mod seerr;

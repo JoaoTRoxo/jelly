@@ -1,6 +1,7 @@
 //! Seerr (Jellyseerr / Overseerr): finding movies and shows that aren't in
 //! the library, and requesting them. Blocking: call it off the main thread.
 
+use crate::http::{self, Response};
 use gtk::glib;
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
@@ -46,23 +47,26 @@ impl std::fmt::Display for Error {
 
 impl From<ureq::Error> for Error {
     fn from(e: ureq::Error) -> Error {
-        match e {
-            ureq::Error::Status(401, _) => Error::SignIn,
-            ureq::Error::Status(code, resp) => {
-                // Seerr explains in {"message": …} (or {"error": …})
-                let body: Value = resp.into_json().unwrap_or_default();
-                let message = body["message"]
-                    .as_str()
-                    .or(body["error"].as_str())
-                    .map(String::from);
-                Error::Server(message.unwrap_or_else(|| format!("Seerr error {code}")))
-            }
-            ureq::Error::Transport(t) => Error::Network(crate::api::transport_problem(&t)),
-        }
+        Error::Network(http::problem(&e))
     }
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
+
+/// What an error status means: Seerr explains in {"message": …} (or
+/// {"error": …})
+fn status_error(response: Response) -> Error {
+    let code = response.status().as_u16();
+    if code == 401 {
+        return Error::SignIn;
+    }
+    let body: Value = http::read_json(response).unwrap_or_default();
+    let message = body["message"]
+        .as_str()
+        .or(body["error"].as_str())
+        .map(String::from);
+    Error::Server(message.unwrap_or_else(|| format!("Seerr error {code}")))
+}
 
 /// A movie or show found by Seerr's search (from TMDB)
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -551,16 +555,14 @@ pub fn candidates(jellyfin_server: &str) -> Vec<String> {
 
 /// The first of `candidates` where Seerr answers
 pub fn find(jellyfin_server: &str) -> Option<String> {
-    let agent = ureq::AgentBuilder::new()
-        .timeout(Duration::from_secs(3))
-        .user_agent(&user_agent())
-        .build();
+    let agent = http::agent(Some(Duration::from_secs(3)));
     candidates(jellyfin_server).into_iter().find(|url| {
         let status: Option<Value> = agent
             .get(&format!("{url}/api/v1/status"))
             .call()
             .ok()
-            .and_then(|r| r.into_json().ok());
+            .filter(|r| r.status().is_success())
+            .and_then(|r| http::read_json(r).ok());
         status.is_some_and(|s| s["version"].is_string())
     })
 }
@@ -593,19 +595,6 @@ fn encode(text: &str) -> String {
         .collect()
 }
 
-fn agent() -> ureq::Agent {
-    ureq::AgentBuilder::new()
-        .timeout_connect(Duration::from_secs(10))
-        .timeout_read(Duration::from_secs(30))
-        .user_agent(&user_agent())
-        .build()
-}
-
-/// As the Jellyfin client: proxies in front of servers may turn away unknown ones
-fn user_agent() -> String {
-    format!("{}/{}", crate::api::CLIENT_NAME, crate::api::CLIENT_VERSION)
-}
-
 /// Seerr, signed in
 #[derive(Clone)]
 pub struct Client {
@@ -617,19 +606,22 @@ pub struct Client {
 
 /// Sign in with a Jellyfin account (Seerr checks it with Jellyfin)
 pub fn sign_in(url: &str, username: &str, password: &str) -> Result<Client> {
-    let agent = agent();
+    let agent = http::agent(None);
     let url = url.trim().trim_end_matches('/').to_string();
     let resp = agent
         .post(&format!("{url}/api/v1/auth/jellyfin"))
-        .send_json(json!({ "username": username, "password": password }))
-        .map_err(|e| match Error::from(e) {
+        .send_json(json!({ "username": username, "password": password }))?;
+    if !resp.status().is_success() {
+        return Err(match status_error(resp) {
             Error::SignIn => Error::Server("Seerr didn't accept that password".into()),
             e => e,
-        })?;
+        });
+    }
     let cookie = resp
-        .all("set-cookie")
-        .into_iter()
-        .filter_map(|c| c.split(';').next())
+        .headers()
+        .get_all("set-cookie")
+        .iter()
+        .filter_map(|c| c.to_str().ok()?.split(';').next())
         .find(|c| c.starts_with("connect.sid="));
     let cookie = cookie
         .ok_or_else(|| Error::Server("Seerr didn't start a session".into()))?
@@ -640,7 +632,7 @@ pub fn sign_in(url: &str, username: &str, password: &str) -> Result<Client> {
 impl Client {
     pub fn new(url: &str, cookie: &str) -> Client {
         Client {
-            agent: agent(),
+            agent: http::agent(None),
             url: url.to_string(),
             cookie: cookie.to_string(),
         }
@@ -650,29 +642,32 @@ impl Client {
         let resp = self
             .agent
             .get(&format!("{}{path}", self.url))
-            .set("Cookie", &self.cookie)
-            .call()
-            .map_err(|e| self.explain(e))?;
-        resp.into_json()
+            .header("Cookie", &self.cookie)
+            .call()?;
+        http::read_json(self.check(resp)?)
             .map_err(|e| Error::Server(format!("Unexpected reply from Seerr: {e}")))
     }
 
-    /// Seerr answers 403 both when signed out and when something isn't
-    /// allowed; only asking who's signed in tells them apart
-    fn explain(&self, e: ureq::Error) -> Error {
-        let forbidden = matches!(e, ureq::Error::Status(403, _));
-        let error = Error::from(e);
-        if forbidden
-            && self
-                .agent
-                .get(&format!("{}/api/v1/auth/me", self.url))
-                .set("Cookie", &self.cookie)
-                .call()
-                .is_err()
-        {
-            return Error::SignIn;
+    /// The reply, if it's a success; else what went wrong. Seerr answers 403
+    /// both when signed out and when something isn't allowed; only asking
+    /// who's signed in tells them apart.
+    fn check(&self, resp: Response) -> Result<Response> {
+        if resp.status().is_success() {
+            return Ok(resp);
         }
-        error
+        let forbidden = resp.status().as_u16() == 403;
+        let error = status_error(resp);
+        let signed_in = || {
+            self.agent
+                .get(&format!("{}/api/v1/auth/me", self.url))
+                .header("Cookie", &self.cookie)
+                .call()
+                .is_ok_and(|r| r.status().is_success())
+        };
+        if forbidden && !signed_in() {
+            return Err(Error::SignIn);
+        }
+        Err(error)
     }
 
     /// End the session on Seerr's side too
@@ -680,8 +675,8 @@ impl Client {
         let _ = self
             .agent
             .post(&format!("{}/api/v1/auth/logout", self.url))
-            .set("Cookie", &self.cookie)
-            .call();
+            .header("Cookie", &self.cookie)
+            .send_empty();
     }
 
     /// Movies and shows matching `query` (people left out)
@@ -758,10 +753,9 @@ impl Client {
         let resp = self
             .agent
             .post(&format!("{}/api/v1/request", self.url))
-            .set("Cookie", &self.cookie)
-            .send_json(body)
-            .map_err(|e| self.explain(e))?;
-        let request: Value = resp.into_json().unwrap_or_default();
+            .header("Cookie", &self.cookie)
+            .send_json(body)?;
+        let request: Value = http::read_json(self.check(resp)?).unwrap_or_default();
         Ok(request["status"].as_i64() == Some(2))
     }
 }

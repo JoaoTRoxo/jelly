@@ -1,10 +1,10 @@
 //! Jellyfin API client. Blocking: call it off the main thread (ui::run does).
 
+use crate::http::{self, Response};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer};
 use serde_json::{Value, json};
 use std::collections::HashMap;
-use std::time::Duration;
 
 pub const CLIENT_NAME: &str = "Jelly";
 pub const CLIENT_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -37,29 +37,26 @@ impl std::fmt::Display for Error {
 
 impl From<ureq::Error> for Error {
     fn from(e: ureq::Error) -> Error {
-        match e {
-            ureq::Error::Status(401, _) => Error::Unauthorized,
-            ureq::Error::Status(code, resp) => {
-                let body = resp.into_string().unwrap_or_default();
-                Error::Http(code, body.chars().take(200).collect())
-            }
-            ureq::Error::Transport(t) => Error::Network(transport_problem(&t)),
-        }
+        Error::Network(http::problem(&e))
     }
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-/// What went wrong reaching a server, without its (long) URL: "Connection
-/// Failed: Network is unreachable (os error 101)"
-pub fn transport_problem(t: &ureq::Transport) -> String {
-    let detail = std::error::Error::source(t)
-        .map(|s| s.to_string())
-        .or_else(|| t.message().map(String::from));
-    match detail {
-        Some(detail) => format!("{}: {detail}", t.kind()),
-        None => t.kind().to_string(),
+/// The reply, if it's a success; else what went wrong
+fn check(mut response: Response) -> Result<Response> {
+    match response.status().as_u16() {
+        200..=299 => Ok(response),
+        401 => Err(Error::Unauthorized),
+        code => {
+            let body = response.body_mut().read_to_string().unwrap_or_default();
+            Err(Error::Http(code, body.chars().take(200).collect()))
+        }
     }
+}
+
+fn read_json<T: DeserializeOwned>(response: Response) -> Result<T> {
+    http::read_json(response).map_err(|e| Error::Decode(e.to_string()))
 }
 
 /// Jellyfin sends `null` for some lists; treat it like a missing field.
@@ -354,11 +351,7 @@ pub fn normalize_server(input: &str) -> String {
 
 impl Client {
     pub fn new(server: &str, device_id: &str) -> Client {
-        let agent = ureq::AgentBuilder::new()
-            .timeout_connect(Duration::from_secs(10))
-            .timeout_read(Duration::from_secs(30))
-            .user_agent(&format!("{CLIENT_NAME}/{CLIENT_VERSION}"))
-            .build();
+        let agent = http::agent(None);
         let device_name = gtk::glib::host_name().to_string();
         Client {
             agent,
@@ -398,20 +391,25 @@ impl Client {
         )
     }
 
-    fn request(&self, method: &str, path: &str, query: &[(&str, &str)]) -> ureq::Request {
-        let mut req = self
-            .agent
-            .request(method, &format!("{}{}", self.server, path))
-            .set("Authorization", &self.auth_header());
-        for (k, v) in query {
-            req = req.query(k, v);
-        }
-        req
+    /// `request` to `path` on the server, with the sign-in and `query`
+    fn prepare<B>(
+        &self,
+        request: ureq::RequestBuilder<B>,
+        query: &[(&str, &str)],
+    ) -> ureq::RequestBuilder<B> {
+        let request = request.header("Authorization", &self.auth_header());
+        query
+            .iter()
+            .fold(request, |request, (k, v)| request.query(*k, *v))
+    }
+
+    fn url(&self, path: &str) -> String {
+        format!("{}{path}", self.server)
     }
 
     fn get<T: DeserializeOwned>(&self, path: &str, query: &[(&str, &str)]) -> Result<T> {
-        let resp = self.request("GET", path, query).call()?;
-        resp.into_json().map_err(|e| Error::Decode(e.to_string()))
+        let response = self.prepare(self.agent.get(self.url(path)), query).call()?;
+        read_json(check(response)?)
     }
 
     fn post<T: DeserializeOwned>(
@@ -420,23 +418,25 @@ impl Client {
         query: &[(&str, &str)],
         body: Value,
     ) -> Result<T> {
-        let resp = self.request("POST", path, query).send_json(body)?;
-        resp.into_json().map_err(|e| Error::Decode(e.to_string()))
+        let request = self.prepare(self.agent.post(self.url(path)), query);
+        read_json(check(request.send_json(body)?)?)
     }
 
-    fn send(
-        &self,
-        method: &str,
-        path: &str,
-        query: &[(&str, &str)],
-        body: Option<Value>,
-    ) -> Result<()> {
-        let req = self.request(method, path, query);
-        match body {
-            Some(body) => req.send_json(body)?,
-            None => req.call()?,
+    /// POST `body`, if any, when the reply doesn't matter
+    fn send(&self, path: &str, query: &[(&str, &str)], body: Option<Value>) -> Result<()> {
+        let request = self.prepare(self.agent.post(self.url(path)), query);
+        let response = match body {
+            Some(body) => request.send_json(body)?,
+            None => request.send_empty()?,
         };
-        Ok(())
+        check(response).map(drop)
+    }
+
+    fn delete(&self, path: &str, query: &[(&str, &str)]) -> Result<()> {
+        let response = self
+            .prepare(self.agent.delete(self.url(path)), query)
+            .call()?;
+        check(response).map(drop)
     }
 
     /// Check that the address is a Jellyfin server
@@ -480,7 +480,7 @@ impl Client {
     }
 
     pub fn logout(&self) -> Result<()> {
-        self.send("POST", "/Sessions/Logout", &[], None)
+        self.send("/Sessions/Logout", &[], None)
     }
 
     pub fn views(&self) -> Result<Vec<Item>> {
@@ -733,17 +733,17 @@ impl Client {
             Report::Progress => "/Sessions/Playing/Progress",
             Report::Stopped => "/Sessions/Playing/Stopped",
         };
-        self.send("POST", path, &[], Some(body))
+        self.send(path, &[], Some(body))
     }
 
     pub fn set_played(&self, item_id: &str, played: bool) -> Result<()> {
-        let method = if played { "POST" } else { "DELETE" };
-        self.send(
-            method,
-            &format!("/UserPlayedItems/{item_id}"),
-            &[("userId", &self.user_id)],
-            None,
-        )
+        let path = format!("/UserPlayedItems/{item_id}");
+        let query = [("userId", self.user_id.as_str())];
+        if played {
+            self.send(&path, &query, None)
+        } else {
+            self.delete(&path, &query)
+        }
     }
 
     pub fn image_url(&self, item_id: &str, kind: &str, tag: &str, width: u32) -> String {
@@ -802,15 +802,11 @@ impl Client {
 
     /// Fetch raw bytes (images)
     pub fn fetch(&self, url: &str) -> Result<Vec<u8>> {
-        let resp = self
+        let request = self
             .agent
             .get(url)
-            .set("Authorization", &self.auth_header())
-            .call()?;
-        let mut bytes = Vec::new();
-        std::io::Read::read_to_end(&mut resp.into_reader(), &mut bytes)
-            .map_err(|e| Error::Network(e.to_string()))?;
-        Ok(bytes)
+            .header("Authorization", &self.auth_header());
+        http::read_image(check(request.call()?)?).map_err(Error::from)
     }
 }
 
