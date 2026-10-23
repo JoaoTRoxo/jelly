@@ -40,7 +40,9 @@ tools/windows-bundle.sh        # target/windows/Jelly, which runs outside MSYS2
   main thread through `ui::run`)
 - `src/seerr.rs`: the Seerr client
 - `src/mpv.rs`: the libmpv bindings, its client API and its OpenGL render API
-- `src/cli.rs`: the command line
+- `src/cli.rs`: the command line, and `src/completion.rs` its completion in
+  bash, zsh and fish (the scripts, in `data/completions/`, ask
+  `jelly __complete` what comes next)
 - `src/bin/jelly-launcher.rs`: the Windows release's `jelly.exe`, which
   starts the app in its `runtime` folder
 - `src/session.rs`: the saved sign-ins and settings

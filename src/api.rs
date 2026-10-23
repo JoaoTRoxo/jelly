@@ -371,6 +371,15 @@ impl Client {
         }
     }
 
+    /// The same, giving up on each call after `limit` (completing the command
+    /// line mustn't hang)
+    pub fn time_limit(self, limit: std::time::Duration) -> Client {
+        Client {
+            agent: http::agent(Some(limit)),
+            ..self
+        }
+    }
+
     fn auth_header(&self) -> String {
         let mut h = format!(
             r#"MediaBrowser Client="{CLIENT_NAME}", Device="{}", DeviceId="{}", Version="{CLIENT_VERSION}""#,
@@ -597,12 +606,21 @@ impl Client {
     }
 
     pub fn search(&self, term: &str) -> Result<Vec<Item>> {
+        self.search_for(term, "Movie,Series,Episode")
+    }
+
+    /// Only movies and shows (episodes otherwise come first)
+    pub fn search_titles(&self, term: &str) -> Result<Vec<Item>> {
+        self.search_for(term, "Movie,Series")
+    }
+
+    fn search_for(&self, term: &str, kinds: &str) -> Result<Vec<Item>> {
         let list: ItemList = self.get(
             "/Items",
             &[
                 ("userId", &self.user_id),
                 ("searchTerm", term),
-                ("includeItemTypes", "Movie,Series,Episode"),
+                ("includeItemTypes", kinds),
                 ("recursive", "true"),
                 ("limit", "60"),
                 ("fields", ITEM_FIELDS),

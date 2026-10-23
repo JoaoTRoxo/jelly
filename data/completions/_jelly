@@ -1,0 +1,25 @@
+#compdef jelly
+# Completion for Jelly in zsh: install.sh installs it as _jelly, for a folder
+# on $fpath, or add `source <(jelly completions zsh)` to ~/.zshrc after
+# compinit. Jelly itself says what can come next (jelly __complete), so titles
+# complete too.
+
+_jelly() {
+    if [[ $words[CURRENT-1] == --play ]]; then
+        _files
+        return
+    fi
+    local -a found
+    local line
+    for line in "${(@f)$("${words[1]/#\~/$HOME}" __complete "${(@Q)words[2,CURRENT]}" 2>/dev/null)}"; do
+        [[ -n $line ]] && found+=("${${line%%$'\t'*}//:/\\:}:${line#*$'\t'}")
+    done
+    # Jelly matched them already, in any case
+    _describe -t jelly jelly found -U
+}
+
+if [[ $zsh_eval_context[-1] == loadautofunc ]]; then
+    _jelly "$@"
+else
+    compdef _jelly jelly
+fi

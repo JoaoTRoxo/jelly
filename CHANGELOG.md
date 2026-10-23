@@ -6,6 +6,12 @@ All notable changes to Jelly are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Tab completion in bash, zsh and fish, for the commands and for the movies
+  and shows on your server in `play` and `open`. `install.sh` and the Linux
+  tarball include it, and `jelly completions SHELL` prints it.
+
 ### Fixed
 
 - The Windows release no longer includes Mesa's `opengl32.dll`, which Windows

@@ -133,6 +133,14 @@ jelly list continue       # also next-up, latest; --json for scripts
 jelly list requests       # what's on its way through Seerr, and how far along
 ```
 
+Tab completes the commands, and in `play` and `open` the movies and shows
+on your server (`jelly play fri` Tab → `jelly play Frieren: Beyond Journey's
+End`; with nothing typed, what you're watching). `install.sh` sets it up for
+bash and fish; for zsh, add `fpath+=(~/.local/share/zsh/site-functions)` to
+`~/.zshrc` before `compinit`. Or load it from the shell's startup file:
+`source <(jelly completions bash)` or `zsh`, or `jelly completions fish |
+source`.
+
 `continue`, `play` and `open` use the window that's open, if there is one
 (on Windows, they open a window of their own); `search` and `list` print. A
 name can also be an ID from `search` or `list`. To put `continue` on a key,
