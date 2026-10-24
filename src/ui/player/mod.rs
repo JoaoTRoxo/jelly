@@ -5,6 +5,7 @@
 
 mod controls;
 mod offers;
+mod picks;
 mod report;
 mod tracks;
 
@@ -679,13 +680,15 @@ impl Player {
     fn file_loaded(self: &Rc<Self>) {
         self.refresh_tracks();
         self.read_chapters();
-        // Jellyfin's choice of tracks follows the user's language settings
-        let defaults = self.state.borrow().playing.as_ref().map(|p| {
-            (
-                p.source.default_audio_stream_index,
-                p.source.default_subtitle_stream_index,
-            )
-        });
+        // Jellyfin's choice of tracks follows the user's language settings,
+        // unless others were picked in the show
+        let picked = self.show_picks();
+        let defaults = self
+            .state
+            .borrow()
+            .playing
+            .as_ref()
+            .map(|p| picks::streams(&p.source, picked.as_ref()));
         if let Some((audio, subtitle)) = defaults {
             let find = |kind: &str, index: Option<i32>| {
                 let st = self.state.borrow();

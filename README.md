@@ -25,8 +25,8 @@ picture and sound exactly as they are.
   and episodes, cast, and similar titles; right-click any card to play from
   the beginning, go to its show, or mark it watched
 - **Playback** resumes where you left off on any device, picks the audio and
-  subtitle tracks your Jellyfin language settings ask for, and reports
-  progress back. It offers to skip intros and recaps, counts down to the
+  subtitle tracks your Jellyfin language settings ask for (or, in a show,
+  the ones you last picked in it), and reports progress back. It offers to skip intros and recaps, counts down to the
   next episode over the credits, marks chapters on the seek bar and shows
   when it will end
 - **Requests** through [Seerr](https://github.com/seerr-team/seerr)

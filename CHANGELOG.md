@@ -6,6 +6,13 @@ All notable changes to Jelly are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- The audio and subtitles picked in an episode are picked again in the
+  show's other episodes: the same language, and the same track among
+  several in it ("Dialogue" rather than "Signs/Songs"). They're kept per
+  show in `settings.json`.
+
 ## [0.3.0] - 2026-10-23
 
 ### Added
