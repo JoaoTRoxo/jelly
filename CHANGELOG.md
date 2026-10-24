@@ -6,6 +6,11 @@ All notable changes to Jelly are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- A button to go back to the previous episode, next to the next episode's
+  (or P).
+
 ## [0.3.0] - 2026-10-23
 
 ### Added
