@@ -99,6 +99,7 @@ struct State {
     segments: Vec<api::Segment>,
     /// Start and title of each chapter
     chapters: Vec<(f64, String)>,
+    previous: Option<api::Item>,
     next: Option<api::Item>,
     /// The next episode's card was dismissed: don't play it at the end either
     next_declined: bool,
@@ -132,6 +133,7 @@ impl State {
             tracks: Vec::new(),
             segments: Vec::new(),
             chapters: Vec::new(),
+            previous: None,
             next: None,
             next_declined: false,
             skip: None,
@@ -169,6 +171,7 @@ pub struct Player {
     audio_list: gtk::Box,
     subs_button: gtk::MenuButton,
     subs_list: gtk::Box,
+    previous_button: gtk::Button,
     next_button: gtk::Button,
     fullscreen_button: gtk::Button,
     /// "Ends at 23:14"
@@ -289,6 +292,7 @@ impl Player {
             play_button,
             back10,
             forward30,
+            previous_button,
             next_button,
             seek,
             position_label,
@@ -335,6 +339,7 @@ impl Player {
             audio_list,
             subs_button,
             subs_list,
+            previous_button,
             next_button,
             fullscreen_button,
             ends,
@@ -506,6 +511,7 @@ impl Player {
             st.playing = None;
             st.segments.clear();
             st.chapters.clear();
+            st.previous = None;
             st.next = None;
             st.next_declined = false;
             st.skip = None;
@@ -518,6 +524,7 @@ impl Player {
         self.error.set_visible(false);
         self.skip_button.set_visible(false);
         self.up_next.root.set_visible(false);
+        self.previous_button.set_visible(false);
         self.next_button.set_visible(false);
         self.seek.clear_marks();
         self.update_spinner();
@@ -549,10 +556,12 @@ impl Player {
                     &ctx,
                     move |client| {
                         let info = client.playback_info(&id)?;
-                        // Optional extras: skip buttons and the next episode
+                        // Optional extras: skip buttons and the episodes either side
                         let segments = client.segments(&id).unwrap_or_default();
-                        let next = episode.and_then(|e| client.next_episode(&e).ok().flatten());
-                        Ok((info, segments, next))
+                        let adjacent = episode
+                            .and_then(|e| client.adjacent_episodes(&e).ok())
+                            .unwrap_or_default();
+                        Ok((info, segments, adjacent))
                     },
                     move |result| {
                         let Some(p) = weak.upgrade() else { return };
@@ -560,8 +569,8 @@ impl Player {
                             return; // something else was started meanwhile
                         }
                         match result {
-                            Ok((info, segments, next)) => {
-                                p.start(item, start, info, segments, next)
+                            Ok((info, segments, adjacent)) => {
+                                p.start(item, start, info, segments, adjacent)
                             }
                             Err(e) => p.show_error(&e.to_string()),
                         }
@@ -577,7 +586,7 @@ impl Player {
         start: f64,
         info: api::PlaybackInfo,
         segments: Vec<api::Segment>,
-        next: Option<api::Item>,
+        (previous, next): (Option<api::Item>, Option<api::Item>),
     ) {
         let Some(client) = self.ctx.upgrade().and_then(|c| c.client()) else {
             return;
@@ -613,6 +622,7 @@ impl Player {
             },
         );
         self.mpv_set("pause", "no");
+        self.previous_button.set_visible(previous.is_some());
         self.next_button.set_visible(next.is_some());
         if let Some(ctx) = self.ctx.upgrade() {
             ctx.window.set_title(Some(&item.name));
@@ -630,6 +640,7 @@ impl Player {
                 started: false,
             });
             st.segments = segments;
+            st.previous = previous;
             st.next = next;
         }
         self.open_file(&url);

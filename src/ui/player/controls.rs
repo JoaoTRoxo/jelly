@@ -22,6 +22,7 @@ pub struct Controls {
     pub play_button: gtk::Button,
     pub back10: gtk::Button,
     pub forward30: gtk::Button,
+    pub previous_button: gtk::Button,
     pub next_button: gtk::Button,
     pub seek: gtk::Scale,
     pub position_label: gtk::Label,
@@ -99,6 +100,8 @@ impl Controls {
         play_button.add_css_class("play-button");
         let back10 = icon_button("media-seek-backward-symbolic", "Back 10 s (J)");
         let forward30 = icon_button("media-seek-forward-symbolic", "Forward 30 s");
+        let previous_button = icon_button("media-skip-backward-symbolic", "Previous episode (P)");
+        previous_button.set_visible(false);
         let next_button = icon_button("media-skip-forward-symbolic", "Next episode (N)");
         next_button.set_visible(false);
 
@@ -143,7 +146,13 @@ impl Controls {
             .build();
 
         let buttons = gtk::Box::builder().spacing(4).build();
-        for b in [&play_button, &back10, &forward30, &next_button] {
+        for b in [
+            &play_button,
+            &back10,
+            &forward30,
+            &previous_button,
+            &next_button,
+        ] {
             buttons.append(b);
         }
         let spacer = gtk::Box::builder().hexpand(true).build();
@@ -217,6 +226,7 @@ impl Controls {
             play_button,
             back10,
             forward30,
+            previous_button,
             next_button,
             seek,
             position_label,
@@ -378,6 +388,7 @@ impl Player {
         on(&self.play_button, |p| p.toggle_pause());
         on(back10, |p| p.seek_by(-10.0));
         on(forward30, |p| p.seek_by(30.0));
+        on(&self.previous_button, |p| p.play_previous());
         on(&self.next_button, |p| p.play_next());
         on(&self.fullscreen_button, |p| p.toggle_fullscreen());
         on(mute, |p| p.toggle_mute());
@@ -466,6 +477,7 @@ impl Player {
                 Key::s | Key::S => p.cycle_track("sid"),
                 Key::a | Key::A => p.cycle_track("aid"),
                 Key::n | Key::N => p.play_next(),
+                Key::p | Key::P => p.play_previous(),
                 _ => return glib::Propagation::Proceed,
             }
             p.show_controls();
@@ -572,7 +584,16 @@ impl Player {
 
     pub(super) fn play_next(self: &Rc<Self>) {
         let next = self.state.borrow().next.clone();
-        if let Some(item) = next {
+        self.play_episode(next);
+    }
+
+    pub(super) fn play_previous(self: &Rc<Self>) {
+        let previous = self.state.borrow().previous.clone();
+        self.play_episode(previous);
+    }
+
+    fn play_episode(self: &Rc<Self>, episode: Option<api::Item>) {
+        if let Some(item) = episode {
             let start = item.resume_seconds();
             self.load(Media::Jellyfin {
                 item: Box::new(item),

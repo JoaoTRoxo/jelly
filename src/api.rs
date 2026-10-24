@@ -349,6 +349,16 @@ pub fn normalize_server(input: &str) -> String {
     format!("{}://{s}", if home { "http" } else { "https" })
 }
 
+/// The items either side of the one with `id` (none if it isn't there)
+fn around(mut items: Vec<Item>, id: &str) -> (Option<Item>, Option<Item>) {
+    let Some(at) = items.iter().position(|i| i.id == id) else {
+        return (None, None);
+    };
+    let next = (at + 1 < items.len()).then(|| items.remove(at + 1));
+    let previous = at.checked_sub(1).map(|i| items.swap_remove(i));
+    (previous, next)
+}
+
 impl Client {
     pub fn new(server: &str, device_id: &str) -> Client {
         let agent = http::agent(None);
@@ -679,21 +689,20 @@ impl Client {
         Ok(list.items)
     }
 
-    /// The episode after `episode` (across seasons), if any
-    pub fn next_episode(&self, episode: &Item) -> Result<Option<Item>> {
+    /// The episodes before and after `episode` (across seasons), if any
+    pub fn adjacent_episodes(&self, episode: &Item) -> Result<(Option<Item>, Option<Item>)> {
         let Some(series) = &episode.series_id else {
-            return Ok(None);
+            return Ok((None, None));
         };
         let list: ItemList = self.get(
             &format!("/Shows/{series}/Episodes"),
             &[
                 ("userId", &self.user_id),
-                ("startItemId", &episode.id),
-                ("limit", "2"),
+                ("adjacentTo", &episode.id),
                 ("fields", ITEM_FIELDS),
             ],
         )?;
-        Ok(list.items.into_iter().find(|i| i.id != episode.id))
+        Ok(around(list.items, &episode.id))
     }
 
     /// Ask for direct play of everything: mpv plays any container and codec,
@@ -850,5 +859,29 @@ mod tests {
             normalize_server("media.example.com:8920"),
             "http://media.example.com:8920"
         );
+    }
+
+    #[test]
+    fn episodes_either_side() {
+        let items = |ids: &[&str]| -> Vec<Item> {
+            ids.iter()
+                .map(|id| Item {
+                    id: id.to_string(),
+                    ..Item::default()
+                })
+                .collect()
+        };
+        let ids = |(previous, next): (Option<Item>, Option<Item>)| {
+            (previous.map(|i| i.id), next.map(|i| i.id))
+        };
+        let some = |id: &str| Some(id.to_string());
+        assert_eq!(
+            ids(around(items(&["1", "2", "3"]), "2")),
+            (some("1"), some("3"))
+        );
+        // The first and last episodes, as Jellyfin's adjacentTo gives them
+        assert_eq!(ids(around(items(&["1", "2"]), "1")), (None, some("2")));
+        assert_eq!(ids(around(items(&["21", "22"]), "22")), (some("21"), None));
+        assert_eq!(ids(around(items(&["5"]), "4")), (None, None));
     }
 }
