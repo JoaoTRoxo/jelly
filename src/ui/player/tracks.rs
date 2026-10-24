@@ -183,6 +183,22 @@ impl Player {
     }
 }
 
+/// The chapter at `time`, when it has a name: not when it's only numbered
+/// ("Chapter 01", "Scene 3", "00:05:00.000"), which says nothing the time
+/// doesn't
+pub fn chapter_name(chapters: &[(f64, String)], time: f64) -> Option<&str> {
+    let (_, title) = chapters.iter().rev().find(|(start, _)| *start <= time)?;
+    let title = title.trim();
+    let number = title
+        .trim_start_matches(char::is_alphabetic)
+        .trim_start_matches(['.', '#', ' ']);
+    let numbered = !number.is_empty()
+        && number
+            .chars()
+            .all(|c| c.is_ascii_digit() || c == ':' || c == '.');
+    (!title.is_empty() && !numbered).then_some(title)
+}
+
 pub fn scrolling(child: &impl IsA<gtk::Widget>) -> gtk::ScrolledWindow {
     gtk::ScrolledWindow::builder()
         .child(child)
@@ -229,5 +245,37 @@ fn fill_track_list(
     }
     for t in of_kind {
         add(&t.label, Some(t.id), t.selected);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn chapters(titles: &[&str]) -> Vec<(f64, String)> {
+        titles
+            .iter()
+            .enumerate()
+            .map(|(i, t)| (i as f64 * 100.0, t.to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn names_chapters_with_a_name() {
+        let named = chapters(&["Prologue", "Opening", "Parte A", "1. Ending"]);
+        assert_eq!(chapter_name(&named, 50.0), Some("Prologue"));
+        assert_eq!(chapter_name(&named, 250.0), Some("Parte A"));
+        assert_eq!(chapter_name(&named, 1000.0), Some("1. Ending"));
+    }
+
+    #[test]
+    fn leaves_out_numbered_chapters() {
+        let numbered = chapters(&["Chapter 01", "Scene 2", "Ch. 3", "Capítulo 4", "7", ""]);
+        for time in [0.0, 100.0, 200.0, 300.0, 400.0, 500.0] {
+            assert_eq!(chapter_name(&numbered, time), None, "at {time}");
+        }
+        assert_eq!(chapter_name(&chapters(&["00:05:00.000"]), 10.0), None);
+        // Before the first chapter
+        assert_eq!(chapter_name(&[(30.0, "Opening".into())], 10.0), None);
     }
 }
