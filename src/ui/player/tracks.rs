@@ -139,8 +139,13 @@ impl Player {
     }
 
     pub(super) fn select_track(&self, property: &str, id: Option<i64>) {
+        let from = self.playing_stream("audio");
         self.mpv_set(property, &id.map_or("no".to_string(), |i| i.to_string()));
-        self.remember_pick(if property == "aid" { "audio" } else { "sub" }, id);
+        if property == "aid" {
+            self.audio_picked(from, id);
+        } else {
+            self.remember_pick("sub", id);
+        }
         self.report(
             api::Report::Progress,
             Some(if property == "aid" {
