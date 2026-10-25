@@ -15,6 +15,11 @@ All notable changes to Jelly are recorded here. The format follows
   several in it ("Dialogue" rather than "Signs/Songs"). They're kept per
   show in `settings.json`.
 
+### Changed
+
+- A and S open the audio and subtitle menus, on the track playing (the
+  arrows and Enter pick one), instead of switching to the next track.
+
 ### Fixed
 
 - The time shown over the seek bar follows the pointer, and leaves out

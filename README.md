@@ -104,7 +104,7 @@ from a device that's signed in.
 | J / L | Back / forward 10 s |
 | ↑ / ↓ | Volume |
 | F, F11, double-click | Fullscreen |
-| S / A | Next subtitle / audio track |
+| S / A | Subtitle / audio menu |
 | M | Mute |
 | N / P | Next / previous episode |
 | Esc | Leave fullscreen, then go back |

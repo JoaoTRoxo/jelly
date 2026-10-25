@@ -151,39 +151,6 @@ impl Player {
             false,
         );
     }
-
-    pub(super) fn cycle_track(self: &Rc<Self>, property: &str) {
-        self.mpv_command(&["cycle", property]);
-        self.refresh_tracks();
-        let kind = if property == "aid" { "audio" } else { "sub" };
-        let selected = self
-            .state
-            .borrow()
-            .tracks
-            .iter()
-            .find(|t| t.kind == kind && t.selected)
-            .map(|t| (t.id, t.label.clone()));
-        self.remember_pick(kind, selected.as_ref().map(|(id, _)| *id));
-        let selected = selected.map(|(_, label)| label);
-        let what = if property == "aid" {
-            "Audio"
-        } else {
-            "Subtitles"
-        };
-        self.osd(&format!(
-            "{what}: {}",
-            selected.unwrap_or_else(|| "Off".into())
-        ));
-        self.report(
-            api::Report::Progress,
-            Some(if property == "aid" {
-                "AudioTrackChange"
-            } else {
-                "SubtitleTrackChange"
-            }),
-            false,
-        );
-    }
 }
 
 /// The chapter at `time`, when it has a name: not when it's only numbered
