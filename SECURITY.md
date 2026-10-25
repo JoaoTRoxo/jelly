@@ -27,8 +27,11 @@ Only the latest release is supported.
 - **Updates**: Jelly installed with the Windows setup downloads new releases
   from this repository's GitHub releases and installs them (through
   [Velopack](https://velopack.io)), checking each package against the
-  SHA-256 in the release's feed. Releases aren't signed, so updates are as
-  trustworthy as this repository's releases.
+  SHA-256 in the release's feed. On Linux, Jelly that `install.sh` installed
+  updates when you click Update: it downloads the release's tarball, checks
+  it against the release's `SHA256SUMS`, and runs the tarball's own
+  `install.sh` into the same place. Releases aren't signed, so updates are
+  as trustworthy as this repository's releases.
 - HTTPS certificates are always checked: Jelly's own requests against the
   Mozilla root certificates built into it, and mpv's against the system's.
   An address typed without `https://` gets HTTPS unless it looks like a

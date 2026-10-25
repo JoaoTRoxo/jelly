@@ -14,12 +14,36 @@ All notable changes to Jelly are recorded here. The format follows
   show's other episodes: the same language, and the same track among
   several in it ("Dialogue" rather than "Signs/Songs"). They're kept per
   show in `settings.json`.
+- Switching the audio to another language turns on the subtitles for all
+  the dialogue in the language you were listening to (from an English dub
+  to Japanese: the English "Dialogue" ones), and switching back to the
+  episode's own audio puts its own subtitles back.
+- On Linux, Jelly installed with `install.sh` updates itself: the notice of
+  a new release has an Update button, which installs it in the same place,
+  then Restart Now.
+
+### Changed
+
+- A simpler seek bar: a line filled up to where the video is, with a dot
+  there only while the pointer is on it, in place of the large knob.
+- A and S open the audio and subtitle menus, on the track playing (the
+  arrows and Enter pick one), instead of switching to the next track.
+- The credits get a Skip Outro button, like Skip Intro. Once they're over
+  (or at the end of the video, when the server doesn't know where they
+  are), a screen shows the next episode and counts down 10 s to it, with
+  Play Now and Cancel. Clicking into the credits on the seek bar no longer
+  plays the next episode straight away.
 
 ### Fixed
 
 - The time shown over the seek bar follows the pointer, and leaves out
   chapters that are only numbered ("Chapter 01"): a chapter shows only
   when it has a name.
+- Blu-ray and DVD subtitles no longer go missing after a seek with
+  hardware decoding: going back a few seconds often left the line on
+  screen out until the next one.
+- The Skip Intro button's text is dark, not white on white, and
+  the audio button is no longer greyed out when there's a single track.
 - The player's keys work as soon as it opens. Until an arrow key moved the
   focus onto one of its buttons, no other key did anything (and again after
   picking a track in a menu).

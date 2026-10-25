@@ -1,7 +1,7 @@
 //! The video player: mpv drawing into a GLArea, with our own controls on top.
 //! Playback is reported to Jellyfin (resume points, watched state, "now
-//! playing"), intro/recap segments get a skip button, and over the credits a
-//! card counts down to the next episode.
+//! playing"), intro, recap and credits segments get a skip button, and once
+//! the credits are over a screen counts down to the next episode.
 
 mod controls;
 mod offers;
@@ -14,7 +14,7 @@ use crate::api;
 use crate::mpv::{self, EndReason, Event, Format, Mpv, Renderer, Value};
 use crate::session;
 use adw::prelude::*;
-use controls::{Controls, UpNextCard};
+use controls::{Controls, NextScreen};
 use gtk::glib;
 use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak};
@@ -22,6 +22,8 @@ use std::time::{Duration, Instant};
 
 const HIDE_CONTROLS_AFTER: Duration = Duration::from_secs(3);
 const REPORT_EVERY: Duration = Duration::from_secs(10);
+/// How often the controls and the next episode's countdown are looked at
+const TICK: Duration = Duration::from_millis(250);
 
 /// Hardware decoding. On Windows only Direct3D 11's, copied back to memory:
 /// OpenGL can't take its frames directly, and trying DXVA2 (Direct3D 9) can
@@ -102,8 +104,12 @@ struct State {
     chapters: Vec<(f64, String)>,
     previous: Option<api::Item>,
     next: Option<api::Item>,
-    /// The next episode's card was dismissed: don't play it at the end either
+    /// Cancel on the next episode's screen: don't play it at the end either
     next_declined: bool,
+    /// Seconds left before the next episode plays, while its screen shows
+    next_countdown: Option<f64>,
+    /// The video played to its end
+    ended: bool,
     skip: Option<(String, f64)>,
     last_motion: Instant,
     pointer: (f64, f64),
@@ -111,6 +117,8 @@ struct State {
     seek_pointer: Option<f64>,
     over_controls: bool,
     seek_hold_until: Instant,
+    /// A seek was asked for: see reselect_image_subs
+    seeked: bool,
     controls_shown: bool,
     inhibit: Option<u32>,
     last_report: Instant,
@@ -139,12 +147,15 @@ impl State {
             previous: None,
             next: None,
             next_declined: false,
+            next_countdown: None,
+            ended: false,
             skip: None,
             last_motion: now,
             pointer: (-1.0, -1.0),
             seek_pointer: None,
             over_controls: false,
             seek_hold_until: now,
+            seeked: false,
             controls_shown: true,
             inhibit: None,
             last_report: now,
@@ -182,7 +193,7 @@ pub struct Player {
     /// "Ends at 23:14"
     ends: gtk::Label,
     skip_button: gtk::Button,
-    up_next: UpNextCard,
+    up_next: NextScreen,
     spinner: adw::Spinner,
     error: adw::StatusPage,
     fullscreen_handler: RefCell<Option<glib::SignalHandlerId>>,
@@ -408,9 +419,10 @@ impl Player {
         *player.fullscreen_handler.borrow_mut() = Some(handler);
 
         let weak = Rc::downgrade(&player);
-        glib::timeout_add_local(Duration::from_millis(250), move || match weak.upgrade() {
+        glib::timeout_add_local(TICK, move || match weak.upgrade() {
             Some(p) if !p.state.borrow().closed => {
                 p.tick();
+                p.count_down(TICK.as_secs_f64());
                 glib::ControlFlow::Continue
             }
             _ => glib::ControlFlow::Break,
@@ -524,6 +536,8 @@ impl Player {
             st.previous = None;
             st.next = None;
             st.next_declined = false;
+            st.next_countdown = None;
+            st.ended = false;
             st.skip = None;
             st.tracks.clear();
             st.position = 0.0;
@@ -687,6 +701,7 @@ impl Player {
                 }
                 Event::FileLoaded => self.file_loaded(),
                 Event::PlaybackRestart => {
+                    self.reselect_image_subs();
                     self.state.borrow_mut().loading = false;
                     self.update_spinner();
                 }
@@ -710,15 +725,7 @@ impl Player {
             .as_ref()
             .map(|p| picks::streams(&p.source, picked.as_ref()));
         if let Some((audio, subtitle)) = defaults {
-            let find = |kind: &str, index: Option<i32>| {
-                let st = self.state.borrow();
-                index.and_then(|i| {
-                    st.tracks
-                        .iter()
-                        .find(|t| t.kind == kind && t.jellyfin_index == Some(i))
-                        .map(|t| t.id)
-                })
-            };
+            let find = |kind, index: Option<i32>| index.and_then(|i| self.mpv_track(kind, i));
             if let Some(id) = find("audio", audio) {
                 self.mpv_set("aid", &id.to_string());
             }
@@ -746,13 +753,16 @@ impl Player {
     fn file_ended(self: &Rc<Self>, reason: EndReason, error: Option<String>) {
         match reason {
             EndReason::Eof => {
-                {
+                let next = {
                     let mut st = self.state.borrow_mut();
                     st.position = st.duration;
-                }
-                let next = self.state.borrow().next.is_some() && !self.state.borrow().next_declined;
+                    st.ended = true;
+                    st.next.is_some() && !st.next_declined
+                };
                 if next {
-                    self.play_next();
+                    // Its screen, counting down over the end
+                    self.update_offers();
+                    self.show_controls();
                 } else {
                     self.close();
                 }

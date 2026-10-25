@@ -26,9 +26,11 @@ picture and sound exactly as they are.
   the beginning, go to its show, or mark it watched
 - **Playback** resumes where you left off on any device, picks the audio and
   subtitle tracks your Jellyfin language settings ask for (or, in a show,
-  the ones you last picked in it), and reports progress back. It offers to
-  skip intros and recaps, counts down to the next episode over the credits,
-  marks chapters on the seek bar and shows when it will end
+  the ones you last picked in it), turns on subtitles when you switch to
+  audio in another language, and reports progress back. It offers to skip
+  intros, recaps and credits, counts down to the next episode once the
+  credits are over, marks chapters on the seek bar and shows when it will
+  end
 - **Requests** through [Seerr](https://github.com/seerr-team/seerr)
   (Jellyseerr or Overseerr) for what isn't in the library yet, with how its
   download is going
@@ -64,7 +66,8 @@ sudo apt install cargo libgtk-4-dev libadwaita-1-dev libmpv-dev    # Debian, Ubu
 ```
 
 Either `install.sh` installs elsewhere with `PREFIX=DIR`, and updates Jelly
-when run again. Jelly says when there's a new release.
+when run again. Installed this way, Jelly offers to update itself when
+there's a new release: Update, then Restart Now.
 
 ### Windows
 
@@ -104,15 +107,15 @@ from a device that's signed in.
 | J / L | Back / forward 10 s |
 | ↑ / ↓ | Volume |
 | F, F11, double-click | Fullscreen |
-| S / A | Next subtitle / audio track |
+| S / A | Subtitle / audio menu |
 | M | Mute |
 | N / P | Next / previous episode |
 | Esc | Leave fullscreen, then go back |
 
-Skipping intros and recaps needs the server to know where they are, from the
-[Intro Skipper](https://github.com/intro-skipper/intro-skipper) plugin or
-Jellyfin's media segments. Without a credits segment, the next episode's
-card shows for the last 30 s.
+Skipping intros, recaps and credits needs the server to know where they are,
+from the [Intro Skipper](https://github.com/intro-skipper/intro-skipper)
+plugin or Jellyfin's media segments. Without a credits segment, the next
+episode's countdown starts at the end of the video.
 
 ### Requests
 
