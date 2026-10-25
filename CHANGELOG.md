@@ -32,6 +32,8 @@ All notable changes to Jelly are recorded here. The format follows
 - Blu-ray and DVD subtitles no longer go missing after a seek with
   hardware decoding: going back a few seconds often left the line on
   screen out until the next one.
+- The Skip Intro button's text is dark, not white on white, and
+  the audio button is no longer greyed out when there's a single track.
 
 ## [0.3.0] - 2026-10-23
 

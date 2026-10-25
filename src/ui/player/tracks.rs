@@ -134,8 +134,9 @@ impl Player {
         fill_track_list(self, &self.audio_list, &tracks, "audio", None);
         fill_track_list(self, &self.subs_list, &tracks, "sub", Some("Off"));
         self.updating.set(false);
-        let audio_count = tracks.iter().filter(|t| t.kind == "audio").count();
-        self.audio_button.set_sensitive(audio_count > 1);
+        // With one track too: greyed out, it looked broken
+        self.audio_button
+            .set_sensitive(tracks.iter().any(|t| t.kind == "audio"));
         self.subs_button
             .set_sensitive(tracks.iter().any(|t| t.kind == "sub"));
         self.state.borrow_mut().tracks = tracks;
