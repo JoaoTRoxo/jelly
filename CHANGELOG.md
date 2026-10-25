@@ -25,6 +25,11 @@ All notable changes to Jelly are recorded here. The format follows
   there only while the pointer is on it, in place of the large knob.
 - A and S open the audio and subtitle menus, on the track playing (the
   arrows and Enter pick one), instead of switching to the next track.
+- The credits get a Skip Outro button, like Skip Intro. Once they're over
+  (or at the end of the video, when the server doesn't know where they
+  are), a screen shows the next episode and counts down 10 s to it, with
+  Play Now and Cancel. Clicking into the credits on the seek bar no longer
+  plays the next episode straight away.
 
 ### Fixed
 

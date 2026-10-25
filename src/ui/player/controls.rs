@@ -40,7 +40,7 @@ pub struct Controls {
     pub fullscreen_button: gtk::Button,
     pub ends: gtk::Label,
     pub skip_button: gtk::Button,
-    pub up_next: UpNextCard,
+    pub up_next: NextScreen,
     pub spinner: adw::Spinner,
     pub error: adw::StatusPage,
     pub error_back: gtk::Button,
@@ -196,7 +196,7 @@ impl Controls {
             .margin_bottom(130)
             .visible(false)
             .build();
-        let up_next = UpNextCard::new();
+        let up_next = NextScreen::new();
         let spinner = adw::Spinner::builder()
             .width_request(64)
             .height_request(64)
@@ -217,11 +217,12 @@ impl Controls {
             .visible(false)
             .build();
 
+        // The next episode's screen under the controls, which still work over it
         for child in [
-            top.upcast_ref::<gtk::Widget>(),
+            up_next.root.upcast_ref::<gtk::Widget>(),
+            top.upcast_ref(),
             bottom.upcast_ref(),
             skip_button.upcast_ref(),
-            up_next.root.upcast_ref(),
             spinner.upcast_ref(),
             error.upcast_ref(),
             seek_time.upcast_ref(),
@@ -262,8 +263,9 @@ impl Controls {
     }
 }
 
-/// The next episode's card, counting down over the credits
-pub struct UpNextCard {
+/// The next episode's screen once the credits are over: over the dimmed
+/// video, counting down to it
+pub struct NextScreen {
     pub root: gtk::Box,
     art: gtk::Box,
     caption: gtk::Label,
@@ -274,22 +276,22 @@ pub struct UpNextCard {
     pub dismiss: gtk::Button,
 }
 
-impl UpNextCard {
-    fn new() -> UpNextCard {
-        let art = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+impl NextScreen {
+    fn new() -> NextScreen {
+        let art = gtk::Box::builder().halign(gtk::Align::Center).build();
         let caption = gtk::Label::builder()
-            .xalign(0.0)
             .css_classes(["caption-heading", "dim-label"])
             .build();
         let title = gtk::Label::builder()
-            .xalign(0.0)
             .ellipsize(gtk::pango::EllipsizeMode::End)
-            .max_width_chars(26)
-            .css_classes(["heading"])
+            .max_width_chars(30)
+            .css_classes(["title-3"])
             .build();
         let countdown = gtk::Label::builder()
-            .xalign(0.0)
-            .css_classes(["caption", "dim-label", "numeric"])
+            .css_classes(["dim-label", "numeric"])
+            .build();
+        let progress = gtk::ProgressBar::builder()
+            .css_classes(["up-next-progress"])
             .build();
         let play = gtk::Button::builder()
             .label("Play Now")
@@ -297,43 +299,39 @@ impl UpNextCard {
             .build();
         let dismiss = gtk::Button::builder()
             .label("Cancel")
-            .css_classes(["pill", "flat"])
+            .css_classes(["pill"])
             .build();
-        let buttons = gtk::Box::builder().spacing(6).margin_top(6).build();
+        let buttons = gtk::Box::builder()
+            .spacing(10)
+            .margin_top(8)
+            .halign(gtk::Align::Center)
+            .build();
         buttons.append(&play);
         buttons.append(&dismiss);
-        let text = gtk::Box::builder()
+        let card = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
-            .spacing(3)
+            .spacing(8)
+            .css_classes(["up-next"])
+            .halign(gtk::Align::Center)
             .valign(gtk::Align::Center)
             .build();
         for widget in [
-            caption.upcast_ref::<gtk::Widget>(),
+            art.upcast_ref::<gtk::Widget>(),
+            caption.upcast_ref(),
             title.upcast_ref(),
             countdown.upcast_ref(),
+            progress.upcast_ref(),
             buttons.upcast_ref(),
         ] {
-            text.append(widget);
+            card.append(widget);
         }
-        let row = gtk::Box::builder().spacing(14).build();
-        row.append(&art);
-        row.append(&text);
-        let progress = gtk::ProgressBar::builder()
-            .css_classes(["up-next-progress"])
-            .build();
         let root = gtk::Box::builder()
-            .orientation(gtk::Orientation::Vertical)
-            .spacing(12)
-            .css_classes(["up-next"])
-            .halign(gtk::Align::End)
-            .valign(gtk::Align::End)
-            .margin_end(32)
-            .margin_bottom(130)
+            .css_classes(["up-next-screen"])
             .visible(false)
             .build();
-        root.append(&row);
-        root.append(&progress);
-        UpNextCard {
+        card.set_hexpand(true);
+        root.append(&card);
+        NextScreen {
             root,
             art,
             caption,
@@ -348,7 +346,7 @@ impl UpNextCard {
     pub fn set_item(&self, ctx: &Rc<Ctx>, item: &api::Item) {
         crate::ui::clear(&self.art);
         self.art
-            .append(&cards::art(ctx, item, Shape::Thumb, 192, 108));
+            .append(&cards::art(ctx, item, Shape::Thumb, 384, 216));
         let code = item
             .episode_code()
             .map(|c| format!(" · {c}"))
@@ -433,10 +431,7 @@ impl Player {
         on(mute, |p| p.toggle_mute());
         on(&self.skip_button, |p| p.skip());
         on(&self.up_next.play, |p| p.play_next());
-        on(&self.up_next.dismiss, |p| {
-            p.state.borrow_mut().next_declined = true;
-            p.update_offers();
-        });
+        on(&self.up_next.dismiss, |p| p.decline_next());
 
         let weak = Rc::downgrade(self);
         self.seek.connect_change_value(move |_, _, value| {
