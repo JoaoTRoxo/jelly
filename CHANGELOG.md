@@ -24,6 +24,9 @@ All notable changes to Jelly are recorded here. The format follows
 - The time shown over the seek bar follows the pointer, and leaves out
   chapters that are only numbered ("Chapter 01"): a chapter shows only
   when it has a name.
+- Blu-ray and DVD subtitles no longer go missing after a seek with
+  hardware decoding: going back a few seconds often left the line on
+  screen out until the next one.
 
 ## [0.3.0] - 2026-10-23
 

@@ -568,12 +568,14 @@ impl Player {
             let mut st = self.state.borrow_mut();
             st.seek_hold_until = Instant::now() + Duration::from_millis(400);
             st.position = seconds;
+            st.seeked = true;
         }
         self.mpv_command(&["seek", &format!("{seconds:.3}"), "absolute"]);
         self.update_time();
     }
 
     pub(super) fn seek_by(&self, delta: f64) {
+        self.state.borrow_mut().seeked = true;
         self.mpv_command(&["seek", &format!("{delta}"), "relative"]);
     }
 
