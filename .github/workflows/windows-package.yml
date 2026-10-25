@@ -152,7 +152,11 @@ jobs:
           $app = Start-Process "$root\current\jelly.exe" -PassThru `
             -RedirectStandardOutput "$smoke\update.out.txt" -RedirectStandardError "$smoke\update.err.txt"
           $downloaded = { Get-ChildItem "$root\packages" -Filter "*$next-full.nupkg" -ErrorAction SilentlyContinue }
-          for ($i = 0; $i -lt 90 -and -not (& $downloaded); $i++) { Start-Sleep 1 }
+          # Velopack goes on after the package is in place, putting its new
+          # Update.exe next to it, and is done once this version's package is
+          # gone: stopped before that, Jelly can't apply it the next time
+          $done = { (& $downloaded) -and -not (Get-ChildItem "$root\packages" -Filter "*-$version-full.nupkg" -ErrorAction SilentlyContinue) }
+          for ($i = 0; $i -lt 90 -and -not (& $done); $i++) { Start-Sleep 1 }
           Stop-Process $app -ErrorAction SilentlyContinue
           if (-not (& $downloaded)) { Get-Content "$smoke\update.err.txt"; throw "Jelly didn't download $next" }
           # ...and the next time it starts, it's that version
@@ -160,6 +164,8 @@ jobs:
           $updated = { Select-String -Quiet -SimpleMatch $next -Path "$root\current\sq.version" -ErrorAction SilentlyContinue }
           for ($i = 0; $i -lt 90 -and -not (& $updated); $i++) { Start-Sleep 1 }
           Get-Process jelly -ErrorAction SilentlyContinue | Stop-Process
+          # Velopack's own log, uploaded with the rest
+          Copy-Item "$env:LOCALAPPDATA\velopack\*.log" $smoke -ErrorAction SilentlyContinue
           if (-not (& $updated)) { throw "Jelly didn't update to $next" }
       - name: Upload the packages
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
