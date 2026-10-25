@@ -52,9 +52,44 @@
   background-color: rgb(16 12 22 / 88%);
   color: white;
 }
+/* The seek bar: a line filled up to where the video is, with a dot there
+   only while the pointer is on it. The trough's clear border keeps it as
+   easy to click as before */
+.player scale.seek > trough {
+  min-height: 4px;
+  border: 6px solid transparent;
+  border-left-width: 0;
+  border-right-width: 0;
+  background-clip: padding-box;
+}
+.player scale.seek > trough > highlight {
+  min-height: 4px;
+}
+.player scale.seek > trough > slider {
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  background: none;
+  box-shadow: none;
+  outline: none;
+}
+.player scale.seek:hover > trough > slider,
+.player scale.seek > trough > slider:active {
+  min-width: 12px;
+  min-height: 12px;
+  margin: -4px;
+  border-radius: 100%;
+  /* Not the pointer libadwaita makes it with marks on one side */
+  transform: none;
+  background-color: white;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 40%);
+}
 /* Chapter starts, as ticks over the seek bar */
 .player scale > marks.top {
   margin-bottom: 2px;
+}
+.player scale.seek > marks.top {
+  margin-bottom: -4px;
 }
 .player scale marks.top indicator {
   min-height: 5px;

@@ -85,6 +85,7 @@ impl Controls {
         let seek = gtk::Scale::with_range(gtk::Orientation::Horizontal, 0.0, 1.0, 1.0);
         seek.set_hexpand(true);
         seek.set_draw_value(false);
+        seek.add_css_class("seek");
         let position_label = gtk::Label::builder()
             .label("0:00")
             .css_classes(["numeric"])
