@@ -23,6 +23,8 @@ All notable changes to Jelly are recorded here. The format follows
 
 - A simpler seek bar: a line filled up to where the video is, with a dot
   there only while the pointer is on it, in place of the large knob.
+- A and S open the audio and subtitle menus, on the track playing (the
+  arrows and Enter pick one), instead of switching to the next track.
 
 ### Fixed
 

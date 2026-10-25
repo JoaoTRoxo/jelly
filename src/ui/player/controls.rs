@@ -8,6 +8,7 @@ use crate::ui::cards::{self, Shape};
 use crate::ui::{Ctx, format_time};
 use adw::prelude::*;
 use gtk::{gdk, glib, graphene};
+use std::cell::Cell;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
@@ -146,6 +147,8 @@ impl Controls {
             "Subtitles (S)",
             &scrolling(&subs_list),
         );
+        focus_checked(&audio_button, &audio_list);
+        focus_checked(&subs_button, &subs_list);
         let fullscreen_button = icon_button("view-fullscreen-symbolic", "Fullscreen (F)");
         let ends = gtk::Label::builder()
             .css_classes(["dim-label", "numeric"])
@@ -364,6 +367,32 @@ fn icon_button(icon: &str, tooltip: &str) -> gtk::Button {
         .build()
 }
 
+/// A track menu opens on the track playing, so the arrows and Enter (or
+/// Space) pick from there
+fn focus_checked(menu: &gtk::MenuButton, list: &gtk::Box) {
+    let Some(popover) = menu.popover() else {
+        return;
+    };
+    let list = list.downgrade();
+    popover.connect_map(move |_| {
+        let list = list.clone();
+        // After the popover's own focus, which goes to the first item
+        glib::idle_add_local_once(move || {
+            let mut child = list.upgrade().and_then(|l| l.first_child());
+            while let Some(item) = child {
+                if item
+                    .downcast_ref::<gtk::CheckButton>()
+                    .is_some_and(|c| c.is_active())
+                {
+                    item.grab_focus();
+                    return;
+                }
+                child = item.next_sibling();
+            }
+        });
+    });
+}
+
 fn menu_button(icon: &str, tooltip: &str, content: &impl IsA<gtk::Widget>) -> gtk::MenuButton {
     let popover = gtk::Popover::builder().child(content).build();
     gtk::MenuButton::builder()
@@ -471,6 +500,13 @@ impl Player {
                 return glib::Propagation::Proceed;
             }
             use gdk::Key;
+            // With a menu open, the keys move and pick in it (A and S close it)
+            let menus = [&p.volume_button, &p.audio_button, &p.subs_button];
+            if menus.iter().any(|b| b.is_active())
+                && !matches!(key, Key::a | Key::A | Key::s | Key::S)
+            {
+                return glib::Propagation::Proceed;
+            }
             match key {
                 Key::space | Key::k | Key::K => p.toggle_pause(),
                 Key::Left => p.seek_by(-5.0),
@@ -488,8 +524,8 @@ impl Player {
                     }
                 }
                 Key::m | Key::M => p.toggle_mute(),
-                Key::s | Key::S => p.cycle_track("sid"),
-                Key::a | Key::A => p.cycle_track("aid"),
+                Key::s | Key::S => p.toggle_menu(&p.subs_button),
+                Key::a | Key::A => p.toggle_menu(&p.audio_button),
                 Key::n | Key::N => p.play_next(),
                 Key::p | Key::P => p.play_previous(),
                 _ => return glib::Propagation::Proceed,
@@ -590,6 +626,41 @@ impl Player {
         self.mpv_command(&["cycle", "mute"]);
         let muted = !self.state.borrow().muted;
         self.osd(if muted { "Muted" } else { "Unmuted" });
+    }
+
+    /// Open a track menu, or close it
+    fn toggle_menu(&self, button: &gtk::MenuButton) {
+        if button.is_active() {
+            button.popdown();
+            return;
+        }
+        if !button.is_sensitive() {
+            return;
+        }
+        // Its own popover, not one of the others
+        for other in [&self.volume_button, &self.audio_button, &self.subs_button] {
+            other.popdown();
+        }
+        // From the button on screen: hidden with the controls, it has nowhere
+        // to open from, so it opens once they're back
+        self.show_controls();
+        if button.is_mapped() {
+            button.popup();
+            return;
+        }
+        let once = Rc::new(Cell::new(None));
+        let handler = once.clone();
+        once.set(Some(button.connect_map(move |button| {
+            if let Some(handler) = handler.take() {
+                button.disconnect(handler);
+            }
+            let button = button.downgrade();
+            glib::idle_add_local_once(move || {
+                if let Some(button) = button.upgrade() {
+                    button.popup();
+                }
+            });
+        })));
     }
 
     pub(super) fn toggle_fullscreen(&self) {
