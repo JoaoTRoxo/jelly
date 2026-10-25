@@ -111,6 +111,8 @@ struct State {
     seek_pointer: Option<f64>,
     over_controls: bool,
     seek_hold_until: Instant,
+    /// A seek was asked for: see reselect_image_subs
+    seeked: bool,
     controls_shown: bool,
     inhibit: Option<u32>,
     last_report: Instant,
@@ -145,6 +147,7 @@ impl State {
             seek_pointer: None,
             over_controls: false,
             seek_hold_until: now,
+            seeked: false,
             controls_shown: true,
             inhibit: None,
             last_report: now,
@@ -684,6 +687,7 @@ impl Player {
                 }
                 Event::FileLoaded => self.file_loaded(),
                 Event::PlaybackRestart => {
+                    self.reselect_image_subs();
                     self.state.borrow_mut().loading = false;
                     self.update_spinner();
                 }
@@ -707,15 +711,7 @@ impl Player {
             .as_ref()
             .map(|p| picks::streams(&p.source, picked.as_ref()));
         if let Some((audio, subtitle)) = defaults {
-            let find = |kind: &str, index: Option<i32>| {
-                let st = self.state.borrow();
-                index.and_then(|i| {
-                    st.tracks
-                        .iter()
-                        .find(|t| t.kind == kind && t.jellyfin_index == Some(i))
-                        .map(|t| t.id)
-                })
-            };
+            let find = |kind, index: Option<i32>| index.and_then(|i| self.mpv_track(kind, i));
             if let Some(id) = find("audio", audio) {
                 self.mpv_set("aid", &id.to_string());
             }

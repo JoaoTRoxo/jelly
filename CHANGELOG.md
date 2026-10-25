@@ -14,6 +14,10 @@ All notable changes to Jelly are recorded here. The format follows
   show's other episodes: the same language, and the same track among
   several in it ("Dialogue" rather than "Signs/Songs"). They're kept per
   show in `settings.json`.
+- Switching the audio to another language turns on the subtitles for all
+  the dialogue in the language you were listening to (from an English dub
+  to Japanese: the English "Dialogue" ones), and switching back to the
+  episode's own audio puts its own subtitles back.
 
 ### Changed
 
@@ -25,6 +29,9 @@ All notable changes to Jelly are recorded here. The format follows
 - The time shown over the seek bar follows the pointer, and leaves out
   chapters that are only numbered ("Chapter 01"): a chapter shows only
   when it has a name.
+- Blu-ray and DVD subtitles no longer go missing after a seek with
+  hardware decoding: going back a few seconds often left the line on
+  screen out until the next one.
 
 ## [0.3.0] - 2026-10-23
 
