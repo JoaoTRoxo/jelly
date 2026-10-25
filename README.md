@@ -26,8 +26,9 @@ picture and sound exactly as they are.
   the beginning, go to its show, or mark it watched
 - **Playback** resumes where you left off on any device, picks the audio and
   subtitle tracks your Jellyfin language settings ask for (or, in a show,
-  the ones you last picked in it), and reports progress back. It offers to
-  skip intros, recaps and credits, counts down to the next episode once the
+  the ones you last picked in it), turns on subtitles when you switch to
+  audio in another language, and reports progress back. It offers to skip
+  intros, recaps and credits, counts down to the next episode once the
   credits are over, marks chapters on the seek bar and shows when it will
   end
 - **Requests** through [Seerr](https://github.com/seerr-team/seerr)
