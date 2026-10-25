@@ -1,95 +1,57 @@
 //! What to offer during playback: "Skip Intro" (and recaps, previews and
-//! credits) inside a segment, and the next episode's card over the credits.
+//! credits) inside a segment, and once the credits are over, the next
+//! episode's screen, counting down to it.
 
 use super::Player;
 use crate::api;
 use adw::prelude::*;
 use std::rc::Rc;
 
-/// Offer the next episode this close to the end when there's no credits segment
-const NEXT_UP_BEFORE_END: f64 = 30.0;
-/// How long the next episode's card counts down over the credits
-const UP_NEXT_COUNTDOWN: f64 = 15.0;
+/// How long the next episode's screen counts down, in seconds
+pub(super) const NEXT_COUNTDOWN: f64 = 10.0;
 
-/// The next episode's card
-#[derive(Debug, Clone, PartialEq)]
-enum UpNext {
-    /// Counting down: seconds left, how far along (0 to 1), and whether over the credits
-    Countdown {
-        seconds: f64,
-        fraction: f64,
-        credits: bool,
-    },
-    /// The countdown ran out
-    Now,
-}
-
-/// What to offer at `position`: a skip button (label, and where it skips to)
-/// and the next episode's card. `declined`: the card was dismissed.
-fn offers(
-    position: f64,
-    duration: f64,
-    segments: &[api::Segment],
-    has_next: bool,
-    declined: bool,
-) -> (Option<(String, f64)>, Option<UpNext>) {
+/// What to offer at `position`: a skip button (label, and where it skips
+/// to), and whether the credits are over: after the credits segment, or at
+/// the end (`ended`) without one.
+fn offers(position: f64, segments: &[api::Segment], ended: bool) -> (Option<(String, f64)>, bool) {
     let outro = segments.iter().find(|s| s.kind == "Outro");
-    let up_next = if !has_next || declined || duration <= 0.0 {
-        None
-    } else {
-        // Shown from `from`, plays the next episode at `until`, and leaves
-        // what's after the credits (`end`) alone
-        let (from, until, end) = match outro {
-            Some(s) => (
-                s.start(),
-                (s.start() + UP_NEXT_COUNTDOWN).min(s.end()),
-                s.end(),
-            ),
-            None => (duration - NEXT_UP_BEFORE_END, duration, duration),
-        };
-        if position < from || position >= end {
-            None
-        } else if position >= until {
-            Some(UpNext::Now)
-        } else {
-            Some(UpNext::Countdown {
-                seconds: until - position,
-                fraction: (position - from) / (until - from),
-                credits: outro.is_some(),
-            })
-        }
-    };
-    // With a next episode, its card takes the credits' place
+    let after_credits = ended || outro.is_some_and(|s| position >= s.end());
     let skip = segments
         .iter()
         .find(|s| position >= s.start() && position < s.end() - 1.0)
-        .filter(|s| !(s.kind == "Outro" && has_next) && up_next.is_none())
         .map(|s| {
             let label = match s.kind.as_str() {
                 "Intro" => "Skip Intro",
                 "Recap" => "Skip Recap",
                 "Preview" => "Skip Preview",
-                "Outro" => "Skip Credits",
+                "Outro" => "Skip Outro",
                 _ => "Skip",
             };
             (label.to_string(), s.end())
         });
-    (skip, up_next)
+    (skip, after_credits)
 }
 
 impl Player {
-    /// Show "Skip Intro" (etc.) inside a segment, and over the credits (or
-    /// near the end) the next episode's card, playing it when its countdown ends
+    /// Show "Skip Intro" (etc.) inside a segment, and once the credits are
+    /// over, the next episode's screen (see count_down). A seek there starts
+    /// its countdown from the top, so it never plays the next one at once.
     pub(super) fn update_offers(self: &Rc<Self>) {
-        let (skip, up_next) = {
-            let st = self.state.borrow();
-            offers(
-                st.position,
-                st.duration,
-                &st.segments,
-                st.next.is_some(),
-                st.next_declined,
-            )
+        let (skip, ask, start) = {
+            let mut st = self.state.borrow_mut();
+            let (skip, after_credits) = offers(st.position, &st.segments, st.ended);
+            // Back before the end of the credits: ask again when it comes
+            if !after_credits {
+                st.next_declined = false;
+            }
+            let ask = after_credits && st.next.is_some() && !st.next_declined;
+            let start = ask && st.next_countdown.is_none();
+            if start {
+                st.next_countdown = Some(NEXT_COUNTDOWN);
+            } else if !ask {
+                st.next_countdown = None;
+            }
+            (skip.filter(|_| !ask), ask, start)
         };
         if self.state.borrow().skip != skip {
             match &skip {
@@ -101,22 +63,53 @@ impl Player {
             }
             self.state.borrow_mut().skip = skip;
         }
-        match up_next {
-            Some(UpNext::Now) => self.play_next(),
-            Some(UpNext::Countdown {
-                seconds,
-                fraction,
-                credits,
-            }) => {
-                let card = &self.up_next;
-                card.countdown
-                    .set_label(&format!("Starts in {} s", seconds.ceil() as i64));
-                card.progress.set_fraction(fraction);
-                card.dismiss
-                    .set_label(if credits { "Watch Credits" } else { "Cancel" });
-                card.root.set_visible(true);
+        if start {
+            self.show_countdown(NEXT_COUNTDOWN);
+        }
+        self.up_next.root.set_visible(ask);
+    }
+
+    /// The next episode's countdown, `seconds` on: held while paused (not
+    /// after the end), and playing it when it runs out
+    pub(super) fn count_down(self: &Rc<Self>, seconds: f64) {
+        let left = {
+            let mut st = self.state.borrow_mut();
+            let running = !st.paused || st.ended;
+            match st.next_countdown.as_mut() {
+                Some(left) if running => {
+                    *left -= seconds;
+                    *left
+                }
+                _ => return,
             }
-            None => self.up_next.root.set_visible(false),
+        };
+        if left <= 0.0 {
+            self.play_next();
+        } else {
+            self.show_countdown(left);
+        }
+    }
+
+    fn show_countdown(&self, left: f64) {
+        let screen = &self.up_next;
+        screen
+            .countdown
+            .set_label(&format!("Starts in {} s", left.ceil() as i64));
+        screen.progress.set_fraction(1.0 - left / NEXT_COUNTDOWN);
+    }
+
+    /// Cancel on the next episode's screen: back to the video, or out of
+    /// the player if it's over
+    pub(super) fn decline_next(self: &Rc<Self>) {
+        let ended = {
+            let mut st = self.state.borrow_mut();
+            st.next_declined = true;
+            st.ended
+        };
+        if ended {
+            self.close();
+        } else {
+            self.update_offers();
         }
     }
 }
@@ -138,60 +131,32 @@ mod tests {
     fn skips_intros() {
         let segments = [segment("Intro", 60.0, 150.0)];
         assert_eq!(
-            offers(70.0, 1400.0, &segments, true, false),
-            (Some(("Skip Intro".into(), 150.0)), None)
+            offers(70.0, &segments, false),
+            (Some(("Skip Intro".into(), 150.0)), false)
         );
-        assert_eq!(offers(200.0, 1400.0, &segments, true, false), (None, None));
+        assert_eq!(offers(200.0, &segments, false), (None, false));
     }
 
     #[test]
-    fn counts_down_over_the_credits() {
+    fn skips_the_credits_then_asks() {
         let segments = [segment("Outro", 1300.0, 1380.0)];
-        assert_eq!(offers(1290.0, 1400.0, &segments, true, false), (None, None));
+        assert_eq!(offers(1290.0, &segments, false), (None, false));
         assert_eq!(
-            offers(1305.0, 1400.0, &segments, true, false),
-            (
-                None,
-                Some(UpNext::Countdown {
-                    seconds: 10.0,
-                    fraction: 5.0 / 15.0,
-                    credits: true
-                })
-            )
+            offers(1305.0, &segments, false),
+            (Some(("Skip Outro".into(), 1380.0)), false)
         );
-        assert_eq!(
-            offers(1315.0, 1400.0, &segments, true, false),
-            (None, Some(UpNext::Now))
-        );
-        // After the credits (a scene there): left alone
-        assert_eq!(offers(1385.0, 1400.0, &segments, true, false), (None, None));
+        // Where Skip Outro goes, or a seek past the credits
+        assert_eq!(offers(1380.0, &segments, false), (None, true));
+        assert_eq!(offers(1395.0, &segments, false), (None, true));
     }
 
     #[test]
-    fn watching_the_credits() {
-        let segments = [segment("Outro", 1300.0, 1380.0)];
-        assert_eq!(offers(1305.0, 1400.0, &segments, true, true), (None, None));
-        // The last episode: just a skip button
-        assert_eq!(
-            offers(1305.0, 1400.0, &segments, false, false),
-            (Some(("Skip Credits".into(), 1380.0)), None)
-        );
-    }
-
-    #[test]
-    fn counts_down_to_the_end_without_credits() {
-        assert_eq!(offers(1360.0, 1400.0, &[], true, false), (None, None));
-        assert_eq!(
-            offers(1380.0, 1400.0, &[], true, false),
-            (
-                None,
-                Some(UpNext::Countdown {
-                    seconds: 20.0,
-                    fraction: 10.0 / 30.0,
-                    credits: false
-                })
-            )
-        );
-        assert_eq!(offers(1380.0, 1400.0, &[], false, false), (None, None));
+    fn asks_at_the_end_without_credits() {
+        assert_eq!(offers(1390.0, &[], false), (None, false));
+        assert_eq!(offers(1400.0, &[], true), (None, true));
+        // Credits to the very end
+        let segments = [segment("Outro", 1300.0, 1400.0)];
+        assert!(!offers(1399.5, &segments, false).1);
+        assert!(offers(1400.0, &segments, true).1);
     }
 }

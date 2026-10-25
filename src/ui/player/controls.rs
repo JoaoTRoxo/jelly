@@ -8,6 +8,7 @@ use crate::ui::cards::{self, Shape};
 use crate::ui::{Ctx, format_time};
 use adw::prelude::*;
 use gtk::{gdk, glib, graphene};
+use std::cell::Cell;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
@@ -39,7 +40,7 @@ pub struct Controls {
     pub fullscreen_button: gtk::Button,
     pub ends: gtk::Label,
     pub skip_button: gtk::Button,
-    pub up_next: UpNextCard,
+    pub up_next: NextScreen,
     pub spinner: adw::Spinner,
     pub error: adw::StatusPage,
     pub error_back: gtk::Button,
@@ -85,6 +86,7 @@ impl Controls {
         let seek = gtk::Scale::with_range(gtk::Orientation::Horizontal, 0.0, 1.0, 1.0);
         seek.set_hexpand(true);
         seek.set_draw_value(false);
+        seek.add_css_class("seek");
         let position_label = gtk::Label::builder()
             .label("0:00")
             .css_classes(["numeric"])
@@ -145,6 +147,8 @@ impl Controls {
             "Subtitles (S)",
             &scrolling(&subs_list),
         );
+        focus_checked(&audio_button, &audio_list);
+        focus_checked(&subs_button, &subs_list);
         let fullscreen_button = icon_button("view-fullscreen-symbolic", "Fullscreen (F)");
         let ends = gtk::Label::builder()
             .css_classes(["dim-label", "numeric"])
@@ -192,7 +196,7 @@ impl Controls {
             .margin_bottom(130)
             .visible(false)
             .build();
-        let up_next = UpNextCard::new();
+        let up_next = NextScreen::new();
         let spinner = adw::Spinner::builder()
             .width_request(64)
             .height_request(64)
@@ -213,11 +217,12 @@ impl Controls {
             .visible(false)
             .build();
 
+        // The next episode's screen under the controls, which still work over it
         for child in [
-            top.upcast_ref::<gtk::Widget>(),
+            up_next.root.upcast_ref::<gtk::Widget>(),
+            top.upcast_ref(),
             bottom.upcast_ref(),
             skip_button.upcast_ref(),
-            up_next.root.upcast_ref(),
             spinner.upcast_ref(),
             error.upcast_ref(),
             seek_time.upcast_ref(),
@@ -258,8 +263,9 @@ impl Controls {
     }
 }
 
-/// The next episode's card, counting down over the credits
-pub struct UpNextCard {
+/// The next episode's screen once the credits are over: over the dimmed
+/// video, counting down to it
+pub struct NextScreen {
     pub root: gtk::Box,
     art: gtk::Box,
     caption: gtk::Label,
@@ -270,22 +276,22 @@ pub struct UpNextCard {
     pub dismiss: gtk::Button,
 }
 
-impl UpNextCard {
-    fn new() -> UpNextCard {
-        let art = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+impl NextScreen {
+    fn new() -> NextScreen {
+        let art = gtk::Box::builder().halign(gtk::Align::Center).build();
         let caption = gtk::Label::builder()
-            .xalign(0.0)
             .css_classes(["caption-heading", "dim-label"])
             .build();
         let title = gtk::Label::builder()
-            .xalign(0.0)
             .ellipsize(gtk::pango::EllipsizeMode::End)
-            .max_width_chars(26)
-            .css_classes(["heading"])
+            .max_width_chars(30)
+            .css_classes(["title-3"])
             .build();
         let countdown = gtk::Label::builder()
-            .xalign(0.0)
-            .css_classes(["caption", "dim-label", "numeric"])
+            .css_classes(["dim-label", "numeric"])
+            .build();
+        let progress = gtk::ProgressBar::builder()
+            .css_classes(["up-next-progress"])
             .build();
         let play = gtk::Button::builder()
             .label("Play Now")
@@ -293,43 +299,39 @@ impl UpNextCard {
             .build();
         let dismiss = gtk::Button::builder()
             .label("Cancel")
-            .css_classes(["pill", "flat"])
+            .css_classes(["pill"])
             .build();
-        let buttons = gtk::Box::builder().spacing(6).margin_top(6).build();
+        let buttons = gtk::Box::builder()
+            .spacing(10)
+            .margin_top(8)
+            .halign(gtk::Align::Center)
+            .build();
         buttons.append(&play);
         buttons.append(&dismiss);
-        let text = gtk::Box::builder()
+        let card = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
-            .spacing(3)
+            .spacing(8)
+            .css_classes(["up-next"])
+            .halign(gtk::Align::Center)
             .valign(gtk::Align::Center)
             .build();
         for widget in [
-            caption.upcast_ref::<gtk::Widget>(),
+            art.upcast_ref::<gtk::Widget>(),
+            caption.upcast_ref(),
             title.upcast_ref(),
             countdown.upcast_ref(),
+            progress.upcast_ref(),
             buttons.upcast_ref(),
         ] {
-            text.append(widget);
+            card.append(widget);
         }
-        let row = gtk::Box::builder().spacing(14).build();
-        row.append(&art);
-        row.append(&text);
-        let progress = gtk::ProgressBar::builder()
-            .css_classes(["up-next-progress"])
-            .build();
         let root = gtk::Box::builder()
-            .orientation(gtk::Orientation::Vertical)
-            .spacing(12)
-            .css_classes(["up-next"])
-            .halign(gtk::Align::End)
-            .valign(gtk::Align::End)
-            .margin_end(32)
-            .margin_bottom(130)
+            .css_classes(["up-next-screen"])
             .visible(false)
             .build();
-        root.append(&row);
-        root.append(&progress);
-        UpNextCard {
+        card.set_hexpand(true);
+        root.append(&card);
+        NextScreen {
             root,
             art,
             caption,
@@ -344,7 +346,7 @@ impl UpNextCard {
     pub fn set_item(&self, ctx: &Rc<Ctx>, item: &api::Item) {
         crate::ui::clear(&self.art);
         self.art
-            .append(&cards::art(ctx, item, Shape::Thumb, 192, 108));
+            .append(&cards::art(ctx, item, Shape::Thumb, 384, 216));
         let code = item
             .episode_code()
             .map(|c| format!(" · {c}"))
@@ -361,6 +363,32 @@ fn icon_button(icon: &str, tooltip: &str) -> gtk::Button {
         .css_classes(["flat", "circular"])
         .valign(gtk::Align::Center)
         .build()
+}
+
+/// A track menu opens on the track playing, so the arrows and Enter (or
+/// Space) pick from there
+fn focus_checked(menu: &gtk::MenuButton, list: &gtk::Box) {
+    let Some(popover) = menu.popover() else {
+        return;
+    };
+    let list = list.downgrade();
+    popover.connect_map(move |_| {
+        let list = list.clone();
+        // After the popover's own focus, which goes to the first item
+        glib::idle_add_local_once(move || {
+            let mut child = list.upgrade().and_then(|l| l.first_child());
+            while let Some(item) = child {
+                if item
+                    .downcast_ref::<gtk::CheckButton>()
+                    .is_some_and(|c| c.is_active())
+                {
+                    item.grab_focus();
+                    return;
+                }
+                child = item.next_sibling();
+            }
+        });
+    });
 }
 
 fn menu_button(icon: &str, tooltip: &str, content: &impl IsA<gtk::Widget>) -> gtk::MenuButton {
@@ -403,10 +431,7 @@ impl Player {
         on(mute, |p| p.toggle_mute());
         on(&self.skip_button, |p| p.skip());
         on(&self.up_next.play, |p| p.play_next());
-        on(&self.up_next.dismiss, |p| {
-            p.state.borrow_mut().next_declined = true;
-            p.update_offers();
-        });
+        on(&self.up_next.dismiss, |p| p.decline_next());
 
         let weak = Rc::downgrade(self);
         self.seek.connect_change_value(move |_, _, value| {
@@ -470,6 +495,13 @@ impl Player {
                 return glib::Propagation::Proceed;
             }
             use gdk::Key;
+            // With a menu open, the keys move and pick in it (A and S close it)
+            let menus = [&p.volume_button, &p.audio_button, &p.subs_button];
+            if menus.iter().any(|b| b.is_active())
+                && !matches!(key, Key::a | Key::A | Key::s | Key::S)
+            {
+                return glib::Propagation::Proceed;
+            }
             match key {
                 Key::space | Key::k | Key::K => p.toggle_pause(),
                 Key::Left => p.seek_by(-5.0),
@@ -487,8 +519,8 @@ impl Player {
                     }
                 }
                 Key::m | Key::M => p.toggle_mute(),
-                Key::s | Key::S => p.cycle_track("sid"),
-                Key::a | Key::A => p.cycle_track("aid"),
+                Key::s | Key::S => p.toggle_menu(&p.subs_button),
+                Key::a | Key::A => p.toggle_menu(&p.audio_button),
                 Key::n | Key::N => p.play_next(),
                 Key::p | Key::P => p.play_previous(),
                 _ => return glib::Propagation::Proceed,
@@ -568,12 +600,14 @@ impl Player {
             let mut st = self.state.borrow_mut();
             st.seek_hold_until = Instant::now() + Duration::from_millis(400);
             st.position = seconds;
+            st.seeked = true;
         }
         self.mpv_command(&["seek", &format!("{seconds:.3}"), "absolute"]);
         self.update_time();
     }
 
     pub(super) fn seek_by(&self, delta: f64) {
+        self.state.borrow_mut().seeked = true;
         self.mpv_command(&["seek", &format!("{delta}"), "relative"]);
     }
 
@@ -587,6 +621,41 @@ impl Player {
         self.mpv_command(&["cycle", "mute"]);
         let muted = !self.state.borrow().muted;
         self.osd(if muted { "Muted" } else { "Unmuted" });
+    }
+
+    /// Open a track menu, or close it
+    fn toggle_menu(&self, button: &gtk::MenuButton) {
+        if button.is_active() {
+            button.popdown();
+            return;
+        }
+        if !button.is_sensitive() {
+            return;
+        }
+        // Its own popover, not one of the others
+        for other in [&self.volume_button, &self.audio_button, &self.subs_button] {
+            other.popdown();
+        }
+        // From the button on screen: hidden with the controls, it has nowhere
+        // to open from, so it opens once they're back
+        self.show_controls();
+        if button.is_mapped() {
+            button.popup();
+            return;
+        }
+        let once = Rc::new(Cell::new(None));
+        let handler = once.clone();
+        once.set(Some(button.connect_map(move |button| {
+            if let Some(handler) = handler.take() {
+                button.disconnect(handler);
+            }
+            let button = button.downgrade();
+            glib::idle_add_local_once(move || {
+                if let Some(button) = button.upgrade() {
+                    button.popup();
+                }
+            });
+        })));
     }
 
     pub(super) fn toggle_fullscreen(&self) {
