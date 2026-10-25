@@ -85,6 +85,7 @@ impl Controls {
         let seek = gtk::Scale::with_range(gtk::Orientation::Horizontal, 0.0, 1.0, 1.0);
         seek.set_hexpand(true);
         seek.set_draw_value(false);
+        seek.add_css_class("seek");
         let position_label = gtk::Label::builder()
             .label("0:00")
             .css_classes(["numeric"])
@@ -568,12 +569,14 @@ impl Player {
             let mut st = self.state.borrow_mut();
             st.seek_hold_until = Instant::now() + Duration::from_millis(400);
             st.position = seconds;
+            st.seeked = true;
         }
         self.mpv_command(&["seek", &format!("{seconds:.3}"), "absolute"]);
         self.update_time();
     }
 
     pub(super) fn seek_by(&self, delta: f64) {
+        self.state.borrow_mut().seeked = true;
         self.mpv_command(&["seek", &format!("{delta}"), "relative"]);
     }
 
