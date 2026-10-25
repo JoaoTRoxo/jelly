@@ -711,15 +711,7 @@ impl Player {
             .as_ref()
             .map(|p| picks::streams(&p.source, picked.as_ref()));
         if let Some((audio, subtitle)) = defaults {
-            let find = |kind: &str, index: Option<i32>| {
-                let st = self.state.borrow();
-                index.and_then(|i| {
-                    st.tracks
-                        .iter()
-                        .find(|t| t.kind == kind && t.jellyfin_index == Some(i))
-                        .map(|t| t.id)
-                })
-            };
+            let find = |kind, index: Option<i32>| index.and_then(|i| self.mpv_track(kind, i));
             if let Some(id) = find("audio", audio) {
                 self.mpv_set("aid", &id.to_string());
             }

@@ -162,8 +162,13 @@ impl Player {
     }
 
     pub(super) fn select_track(&self, property: &str, id: Option<i64>) {
+        let from = self.playing_stream("audio");
         self.mpv_set(property, &id.map_or("no".to_string(), |i| i.to_string()));
-        self.remember_pick(if property == "aid" { "audio" } else { "sub" }, id);
+        if property == "aid" {
+            self.audio_picked(from, id);
+        } else {
+            self.remember_pick("sub", id);
+        }
         self.report(
             api::Report::Progress,
             Some(if property == "aid" {
@@ -176,6 +181,7 @@ impl Player {
     }
 
     pub(super) fn cycle_track(self: &Rc<Self>, property: &str) {
+        let from = self.playing_stream("audio");
         self.mpv_command(&["cycle", property]);
         self.refresh_tracks();
         let kind = if property == "aid" { "audio" } else { "sub" };
@@ -186,7 +192,12 @@ impl Player {
             .iter()
             .find(|t| t.kind == kind && t.selected)
             .map(|t| (t.id, t.label.clone()));
-        self.remember_pick(kind, selected.as_ref().map(|(id, _)| *id));
+        let id = selected.as_ref().map(|(id, _)| *id);
+        if property == "aid" {
+            self.audio_picked(from, id);
+        } else {
+            self.remember_pick(kind, id);
+        }
         let selected = selected.map(|(_, label)| label);
         let what = if property == "aid" {
             "Audio"
