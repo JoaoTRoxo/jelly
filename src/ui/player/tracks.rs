@@ -140,6 +140,7 @@ impl Player {
 
     pub(super) fn select_track(&self, property: &str, id: Option<i64>) {
         self.mpv_set(property, &id.map_or("no".to_string(), |i| i.to_string()));
+        self.remember_pick(if property == "aid" { "audio" } else { "sub" }, id);
         self.report(
             api::Report::Progress,
             Some(if property == "aid" {
@@ -161,7 +162,9 @@ impl Player {
             .tracks
             .iter()
             .find(|t| t.kind == kind && t.selected)
-            .map(|t| t.label.clone());
+            .map(|t| (t.id, t.label.clone()));
+        self.remember_pick(kind, selected.as_ref().map(|(id, _)| *id));
+        let selected = selected.map(|(_, label)| label);
         let what = if property == "aid" {
             "Audio"
         } else {

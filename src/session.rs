@@ -3,6 +3,7 @@
 
 use gtk::glib;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
 #[cfg(unix)]
@@ -33,6 +34,33 @@ pub struct Settings {
     pub volume: f64,
     /// Seerr's address, as last signed in to (else seerr::default_url)
     pub seerr_url: String,
+    /// The tracks last picked in each show (by its Jellyfin id), to pick
+    /// again in its other episodes
+    pub show_tracks: HashMap<String, ShowTracks>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ShowTracks {
+    pub audio: Option<Track>,
+    pub subtitles: Option<Subtitles>,
+}
+
+/// A track, as told apart from the others in an episode
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Track {
+    /// As Jellyfin has it ("jpn")
+    pub language: Option<String>,
+    /// The track's own title ("Dialogue", "Signs/Songs")
+    pub title: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Subtitles {
+    Off,
+    On(Track),
 }
 
 impl Default for Settings {
@@ -41,6 +69,7 @@ impl Default for Settings {
             last_server: String::new(),
             volume: 100.0,
             seerr_url: String::new(),
+            show_tracks: HashMap::new(),
         }
     }
 }
