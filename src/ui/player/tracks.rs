@@ -6,6 +6,9 @@ use crate::api;
 use adw::prelude::*;
 use std::rc::Rc;
 
+/// mpv's names for subtitles drawn as pictures
+const IMAGE_SUBS: [&str; 4] = ["hdmv_pgs_subtitle", "dvd_subtitle", "dvb_subtitle", "xsub"];
+
 impl Player {
     // ---- chapters ----
 
@@ -136,6 +139,26 @@ impl Player {
         self.subs_button
             .set_sensitive(tracks.iter().any(|t| t.kind == "sub"));
         self.state.borrow_mut().tracks = tracks;
+    }
+
+    /// Once a seek is done, select image subtitles (Blu-ray's, DVD's) again.
+    /// With hardware decoding, mpv (0.41) can otherwise lose the line it
+    /// should show at the seek's end, so a seek back often left none until
+    /// the next line; selecting them again reads them from where it is.
+    pub(super) fn reselect_image_subs(&self) {
+        if !std::mem::take(&mut self.state.borrow_mut().seeked) {
+            return;
+        }
+        let (sid, codec) = {
+            let mpv = self.mpv.borrow();
+            let Some(mpv) = mpv.as_ref() else { return };
+            (mpv.get("sid"), mpv.get("current-tracks/sub/codec"))
+        };
+        let image = codec.is_some_and(|c| IMAGE_SUBS.contains(&c.as_str()));
+        if let Some(sid) = sid.filter(|_| image) {
+            self.mpv_set("sid", "no");
+            self.mpv_set("sid", &sid);
+        }
     }
 
     pub(super) fn select_track(&self, property: &str, id: Option<i64>) {

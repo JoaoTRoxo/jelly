@@ -111,6 +111,8 @@ struct State {
     seek_pointer: Option<f64>,
     over_controls: bool,
     seek_hold_until: Instant,
+    /// A seek was asked for: see reselect_image_subs
+    seeked: bool,
     controls_shown: bool,
     inhibit: Option<u32>,
     last_report: Instant,
@@ -145,6 +147,7 @@ impl State {
             seek_pointer: None,
             over_controls: false,
             seek_hold_until: now,
+            seeked: false,
             controls_shown: true,
             inhibit: None,
             last_report: now,
@@ -684,6 +687,7 @@ impl Player {
                 }
                 Event::FileLoaded => self.file_loaded(),
                 Event::PlaybackRestart => {
+                    self.reselect_image_subs();
                     self.state.borrow_mut().loading = false;
                     self.update_spinner();
                 }
