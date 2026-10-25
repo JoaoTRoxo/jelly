@@ -18,6 +18,9 @@ All notable changes to Jelly are recorded here. The format follows
   the dialogue in the language you were listening to (from an English dub
   to Japanese: the English "Dialogue" ones), and switching back to the
   episode's own audio puts its own subtitles back.
+- On Linux, Jelly installed with `install.sh` updates itself: the notice of
+  a new release has an Update button, which installs it in the same place,
+  then Restart Now.
 
 ### Changed
 

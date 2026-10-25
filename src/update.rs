@@ -1,8 +1,10 @@
 //! Keeping Jelly up to date. Installed with the Windows setup, Jelly updates
 //! itself (through Velopack): a newer release on GitHub is downloaded in the
 //! background and starts with Jelly the next time, or right away from the
-//! toast. Anywhere else (Linux, the Windows zip, a build of the source), the
-//! toast only says there's one.
+//! toast. On Linux, installed by install.sh, the toast offers to install the
+//! new release the same way (see tarball.rs). Anywhere else (the Windows zip,
+//! a distribution's package, a build of the source run in place), the toast
+//! only says there's one.
 
 use crate::ui::Ctx;
 use adw::prelude::*;
@@ -11,12 +13,21 @@ use serde::Deserialize;
 use std::rc::Rc;
 use std::time::Duration;
 
+#[cfg(target_os = "linux")]
+mod tarball;
+
 const REPOSITORY: &str = env!("CARGO_PKG_REPOSITORY");
 
 enum Found {
     /// Downloaded, and started the next time
     #[cfg(windows)]
     Ready(Box<velopack::UpdateInfo>),
+    /// To install over this Jelly, as install.sh did
+    #[cfg(target_os = "linux")]
+    Installable {
+        version: String,
+        tarball: tarball::Tarball,
+    },
     /// To get by hand: its version and release page
     Available { version: String, page: String },
 }
@@ -32,6 +43,8 @@ pub fn check(ctx: &Rc<Ctx>) {
         let toast = match found {
             #[cfg(windows)]
             Found::Ready(update) => installed::ready(&ctx, *update),
+            #[cfg(target_os = "linux")]
+            Found::Installable { version, tarball } => tarball::offer(&ctx, version, tarball),
             Found::Available { version, page } => {
                 let toast = adw::Toast::builder()
                     .title(format!("Jelly {version} is available"))
@@ -57,15 +70,43 @@ fn find() -> Option<Found> {
     if let Some(manager) = installed::manager() {
         return installed::download(&manager).map(|u| Found::Ready(Box::new(u)));
     }
-    latest_release()
+    let release = latest_release()?;
+    #[cfg(target_os = "linux")]
+    if let Some(tarball) = tarball::Tarball::of(&release) {
+        return Some(Found::Installable {
+            version: release.version,
+            tarball,
+        });
+    }
+    Some(Found::Available {
+        version: release.version,
+        page: release.page,
+    })
+}
+
+/// A newer release on GitHub: its version, page and files
+struct Release {
+    version: String,
+    page: String,
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    assets: Vec<Asset>,
+}
+
+#[derive(Deserialize)]
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+struct Asset {
+    name: String,
+    browser_download_url: String,
 }
 
 /// The latest release on GitHub, if it's newer than this
-fn latest_release() -> Option<Found> {
+fn latest_release() -> Option<Release> {
     #[derive(Deserialize)]
-    struct Release {
+    struct Latest {
         tag_name: String,
         html_url: String,
+        #[serde(default)]
+        assets: Vec<Asset>,
     }
     let url = format!(
         "{}/releases/latest",
@@ -77,10 +118,11 @@ fn latest_release() -> Option<Found> {
         .call()
         .ok()
         .filter(|r| r.status().is_success())?;
-    let release: Release = crate::http::read_json(response).ok()?;
-    is_newer(&release.tag_name, env!("CARGO_PKG_VERSION")).then(|| Found::Available {
-        version: release.tag_name.trim_start_matches('v').to_string(),
-        page: release.html_url,
+    let latest: Latest = crate::http::read_json(response).ok()?;
+    is_newer(&latest.tag_name, env!("CARGO_PKG_VERSION")).then(|| Release {
+        version: latest.tag_name.trim_start_matches('v').to_string(),
+        page: latest.html_url,
+        assets: latest.assets,
     })
 }
 

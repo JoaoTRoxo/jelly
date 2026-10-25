@@ -66,7 +66,8 @@ sudo apt install cargo libgtk-4-dev libadwaita-1-dev libmpv-dev    # Debian, Ubu
 ```
 
 Either `install.sh` installs elsewhere with `PREFIX=DIR`, and updates Jelly
-when run again. Jelly says when there's a new release.
+when run again. Installed this way, Jelly offers to update itself when
+there's a new release: Update, then Restart Now.
 
 ### Windows
 
