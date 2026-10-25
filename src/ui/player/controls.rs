@@ -8,6 +8,7 @@ use crate::ui::cards::{self, Shape};
 use crate::ui::{Ctx, format_time};
 use adw::prelude::*;
 use gtk::{gdk, glib, graphene};
+use std::cell::Cell;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
@@ -637,7 +638,26 @@ impl Player {
         for other in [&self.volume_button, &self.audio_button, &self.subs_button] {
             other.popdown();
         }
-        button.popup();
+        // From the button on screen: hidden with the controls, it has nowhere
+        // to open from, so it opens once they're back
+        self.show_controls();
+        if button.is_mapped() {
+            button.popup();
+            return;
+        }
+        let once = Rc::new(Cell::new(None));
+        let handler = once.clone();
+        once.set(Some(button.connect_map(move |button| {
+            if let Some(handler) = handler.take() {
+                button.disconnect(handler);
+            }
+            let button = button.downgrade();
+            glib::idle_add_local_once(move || {
+                if let Some(button) = button.upgrade() {
+                    button.popup();
+                }
+            });
+        })));
     }
 
     pub(super) fn toggle_fullscreen(&self) {
