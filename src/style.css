@@ -45,6 +45,13 @@
   background-color: alpha(black, 0.75);
   color: white;
 }
+/* The time under the pointer, over the seek bar */
+.seek-time {
+  padding: 4px 9px;
+  border-radius: 6px;
+  background-color: rgb(16 12 22 / 88%);
+  color: white;
+}
 /* Chapter starts, as ticks over the seek bar */
 .player scale > marks.top {
   margin-bottom: 2px;
