@@ -66,6 +66,19 @@
   </branding>
 
   <releases>
+    <release version="0.4.0" date="2026-10-25">
+      <description>
+        <ul>
+          <li>A button for the previous episode</li>
+          <li>A show's audio and subtitles carry over to its other episodes, and switching the audio to another language turns on subtitles</li>
+          <li>Skip Outro, then a countdown to the next episode, with Play Now and Cancel</li>
+          <li>A simpler seek bar, whose time follows the pointer</li>
+          <li>A and S open the audio and subtitle menus</li>
+          <li>Linux: Jelly installed with install.sh updates itself</li>
+          <li>Fixes for subtitles after a seek, the Skip Intro button's colors, and the player's keys right after it opens</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.3.0" date="2026-10-23">
       <description>
         <ul>

@@ -6,6 +6,8 @@ All notable changes to Jelly are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-25
+
 ### Added
 
 - A button to go back to the previous episode, next to the next episode's
@@ -108,7 +110,8 @@ The first release.
 - Releases for Linux (a tarball that uses the system's GTK, libadwaita and
   libmpv) and Windows (a folder that runs without installing anything).
 
-[Unreleased]: https://github.com/JoaoTRoxo/jelly/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/JoaoTRoxo/jelly/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/JoaoTRoxo/jelly/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/JoaoTRoxo/jelly/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/JoaoTRoxo/jelly/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/JoaoTRoxo/jelly/releases/tag/v0.1.0
