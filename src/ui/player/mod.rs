@@ -197,6 +197,8 @@ pub struct Player {
     spinner: adw::Spinner,
     error: adw::StatusPage,
     fullscreen_handler: RefCell<Option<glib::SignalHandlerId>>,
+    /// The keys' controller, on the window
+    keys: RefCell<Option<gtk::EventControllerKey>>,
     /// Set while we change widgets, so their signals don't act on mpv
     updating: Cell<bool>,
     state: RefCell<State>,
@@ -366,6 +368,7 @@ impl Player {
             spinner,
             error,
             fullscreen_handler: RefCell::new(None),
+            keys: RefCell::new(None),
             updating: Cell::new(false),
             state: RefCell::new(State::new(volume)),
         });
@@ -863,6 +866,9 @@ impl Player {
         if let Some(ctx) = self.ctx.upgrade() {
             if let Some(handler) = self.fullscreen_handler.borrow_mut().take() {
                 ctx.window.disconnect(handler);
+            }
+            if let Some(keys) = self.keys.borrow_mut().take() {
+                ctx.window.remove_controller(&keys);
             }
             if ctx.window.is_fullscreen() {
                 ctx.window.unfullscreen();

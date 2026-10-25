@@ -44,6 +44,9 @@ All notable changes to Jelly are recorded here. The format follows
   screen out until the next one.
 - The Skip Intro button's text is dark, not white on white, and
   the audio button is no longer greyed out when there's a single track.
+- The player's keys work as soon as it opens. Until an arrow key moved the
+  focus onto one of its buttons, no other key did anything (and again after
+  picking a track in a menu).
 
 ## [0.3.0] - 2026-10-23
 
