@@ -20,6 +20,9 @@ All notable changes to Jelly are recorded here. The format follows
 - The time shown over the seek bar follows the pointer, and leaves out
   chapters that are only numbered ("Chapter 01"): a chapter shows only
   when it has a name.
+- The player's keys work as soon as it opens. Until an arrow key moved the
+  focus onto one of its buttons, no other key did anything (and again after
+  picking a track in a menu).
 
 ## [0.3.0] - 2026-10-23
 

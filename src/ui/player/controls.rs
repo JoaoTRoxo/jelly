@@ -466,6 +466,12 @@ impl Player {
             let Some(p) = weak.upgrade() else {
                 return glib::Propagation::Proceed;
             };
+            // The player's keys while it's on screen, with the focus in it or
+            // nowhere (not in a dialog over it, say)
+            let focus = p.page.root().and_then(|root| root.focus());
+            if !p.page.is_mapped() || focus.is_some_and(|f| !f.is_ancestor(&p.page)) {
+                return glib::Propagation::Proceed;
+            }
             if modifiers.intersects(gdk::ModifierType::CONTROL_MASK | gdk::ModifierType::ALT_MASK) {
                 return glib::Propagation::Proceed;
             }
@@ -496,7 +502,13 @@ impl Player {
             p.show_controls();
             glib::Propagation::Stop
         });
-        self.page.add_controller(keys);
+        // On the window, not the page: with nothing focused, as when the
+        // player opens, keys go to the window alone, and an arrow key had to
+        // focus a button before any other key worked
+        if let Some(window) = self.window() {
+            window.add_controller(keys.clone());
+        }
+        *self.keys.borrow_mut() = Some(keys);
 
         let motion = gtk::EventControllerMotion::new();
         let weak = Rc::downgrade(self);
