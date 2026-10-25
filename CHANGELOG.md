@@ -14,6 +14,9 @@ All notable changes to Jelly are recorded here. The format follows
   show's other episodes: the same language, and the same track among
   several in it ("Dialogue" rather than "Signs/Songs"). They're kept per
   show in `settings.json`.
+- On Linux, Jelly installed with `install.sh` updates itself: the notice of
+  a new release has an Update button, which installs it in the same place,
+  then Restart Now.
 
 ### Fixed
 
