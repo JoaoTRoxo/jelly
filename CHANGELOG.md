@@ -15,6 +15,11 @@ All notable changes to Jelly are recorded here. The format follows
   several in it ("Dialogue" rather than "Signs/Songs"). They're kept per
   show in `settings.json`.
 
+### Changed
+
+- A simpler seek bar: a line filled up to where the video is, with a dot
+  there only while the pointer is on it, in place of the large knob.
+
 ### Fixed
 
 - The time shown over the seek bar follows the pointer, and leaves out
