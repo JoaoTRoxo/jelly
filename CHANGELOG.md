@@ -14,6 +14,10 @@ All notable changes to Jelly are recorded here. The format follows
   show's other episodes: the same language, and the same track among
   several in it ("Dialogue" rather than "Signs/Songs"). They're kept per
   show in `settings.json`.
+- Switching the audio to another language turns on the subtitles for all
+  the dialogue in the language you were listening to (from an English dub
+  to Japanese: the English "Dialogue" ones), and switching back to the
+  episode's own audio puts its own subtitles back.
 
 ### Fixed
 
