@@ -32,13 +32,14 @@
 .player scale trough {
   min-height: 6px;
 }
-.skip-button {
+/* (.player: over ".player button", which makes the others' text white) */
+.player .skip-button {
   padding: 10px 26px;
   font-weight: bold;
   background-color: alpha(white, 0.92);
   color: black;
 }
-.skip-button:hover {
+.player .skip-button:hover {
   background-color: white;
 }
 .player-error {

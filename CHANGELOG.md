@@ -20,6 +20,8 @@ All notable changes to Jelly are recorded here. The format follows
 - The time shown over the seek bar follows the pointer, and leaves out
   chapters that are only numbered ("Chapter 01"): a chapter shows only
   when it has a name.
+- The Skip Intro button's text is dark again (it was white on white), and
+  the audio button is no longer greyed out when there's a single track.
 
 ## [0.3.0] - 2026-10-23
 
