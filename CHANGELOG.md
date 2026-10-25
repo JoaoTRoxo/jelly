@@ -21,6 +21,10 @@ All notable changes to Jelly are recorded here. The format follows
 
 ### Changed
 
+- A simpler seek bar: a line filled up to where the video is, with a dot
+  there only while the pointer is on it, in place of the large knob.
+- A and S open the audio and subtitle menus, on the track playing (the
+  arrows and Enter pick one), instead of switching to the next track.
 - The credits get a Skip Outro button, like Skip Intro. Once they're over
   (or at the end of the video, when the server doesn't know where they
   are), a screen shows the next episode and counts down 10 s to it, with
@@ -32,6 +36,11 @@ All notable changes to Jelly are recorded here. The format follows
 - The time shown over the seek bar follows the pointer, and leaves out
   chapters that are only numbered ("Chapter 01"): a chapter shows only
   when it has a name.
+- Blu-ray and DVD subtitles no longer go missing after a seek with
+  hardware decoding: going back a few seconds often left the line on
+  screen out until the next one.
+- The Skip Intro button's text is dark, not white on white, and
+  the audio button is no longer greyed out when there's a single track.
 
 ## [0.3.0] - 2026-10-23
 
