@@ -61,9 +61,12 @@
   min-width: 2px;
   color: alpha(white, 0.6);
 }
-/* The next episode's card, over the credits */
+/* The next episode's screen, once the credits are over */
+.up-next-screen {
+  background-color: rgb(0 0 0 / 60%);
+}
 .up-next {
-  padding: 12px;
+  padding: 16px 16px 20px 16px;
   border-radius: 18px;
   background-color: rgb(16 12 22 / 88%);
   box-shadow: 0 10px 30px rgb(0 0 0 / 50%);

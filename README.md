@@ -27,8 +27,9 @@ picture and sound exactly as they are.
 - **Playback** resumes where you left off on any device, picks the audio and
   subtitle tracks your Jellyfin language settings ask for (or, in a show,
   the ones you last picked in it), and reports progress back. It offers to
-  skip intros and recaps, counts down to the next episode over the credits,
-  marks chapters on the seek bar and shows when it will end
+  skip intros, recaps and credits, counts down to the next episode once the
+  credits are over, marks chapters on the seek bar and shows when it will
+  end
 - **Requests** through [Seerr](https://github.com/seerr-team/seerr)
   (Jellyseerr or Overseerr) for what isn't in the library yet, with how its
   download is going
@@ -109,10 +110,10 @@ from a device that's signed in.
 | N / P | Next / previous episode |
 | Esc | Leave fullscreen, then go back |
 
-Skipping intros and recaps needs the server to know where they are, from the
-[Intro Skipper](https://github.com/intro-skipper/intro-skipper) plugin or
-Jellyfin's media segments. Without a credits segment, the next episode's
-card shows for the last 30 s.
+Skipping intros, recaps and credits needs the server to know where they are,
+from the [Intro Skipper](https://github.com/intro-skipper/intro-skipper)
+plugin or Jellyfin's media segments. Without a credits segment, the next
+episode's countdown starts at the end of the video.
 
 ### Requests
 

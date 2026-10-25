@@ -15,6 +15,14 @@ All notable changes to Jelly are recorded here. The format follows
   several in it ("Dialogue" rather than "Signs/Songs"). They're kept per
   show in `settings.json`.
 
+### Changed
+
+- The credits get a Skip Outro button, like Skip Intro. Once they're over
+  (or at the end of the video, when the server doesn't know where they
+  are), a screen shows the next episode and counts down 10 s to it, with
+  Play Now and Cancel. Clicking into the credits on the seek bar no longer
+  plays the next episode straight away.
+
 ### Fixed
 
 - The time shown over the seek bar follows the pointer, and leaves out
