@@ -106,7 +106,7 @@ from a device that's signed in.
 | F, F11, double-click | Fullscreen |
 | S / A | Next subtitle / audio track |
 | M | Mute |
-| N | Next episode |
+| N / P | Next / previous episode |
 | Esc | Leave fullscreen, then go back |
 
 Skipping intros and recaps needs the server to know where they are, from the

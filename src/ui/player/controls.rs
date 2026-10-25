@@ -1,13 +1,13 @@
 //! The controls over the video: building them, what their buttons, keys and
 //! pointer do, and keeping them up to date.
 
-use super::tracks::scrolling;
+use super::tracks::{chapter_name, scrolling};
 use super::{HIDE_CONTROLS_AFTER, Media, Player};
 use crate::api;
 use crate::ui::cards::{self, Shape};
 use crate::ui::{Ctx, format_time};
 use adw::prelude::*;
-use gtk::{gdk, glib};
+use gtk::{gdk, glib, graphene};
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
@@ -22,8 +22,11 @@ pub struct Controls {
     pub play_button: gtk::Button,
     pub back10: gtk::Button,
     pub forward30: gtk::Button,
+    pub previous_button: gtk::Button,
     pub next_button: gtk::Button,
     pub seek: gtk::Scale,
+    /// The time under the pointer, over the seek bar
+    pub seek_time: gtk::Label,
     pub position_label: gtk::Label,
     pub duration_label: gtk::Label,
     pub volume_button: gtk::MenuButton,
@@ -90,6 +93,11 @@ impl Controls {
             .label("0:00")
             .css_classes(["numeric"])
             .build();
+        let seek_time = gtk::Label::builder()
+            .css_classes(["seek-time", "numeric"])
+            .can_target(false)
+            .visible(false)
+            .build();
         let seek_row = gtk::Box::builder().spacing(12).build();
         seek_row.append(&position_label);
         seek_row.append(&seek);
@@ -99,6 +107,8 @@ impl Controls {
         play_button.add_css_class("play-button");
         let back10 = icon_button("media-seek-backward-symbolic", "Back 10 s (J)");
         let forward30 = icon_button("media-seek-forward-symbolic", "Forward 30 s");
+        let previous_button = icon_button("media-skip-backward-symbolic", "Previous episode (P)");
+        previous_button.set_visible(false);
         let next_button = icon_button("media-skip-forward-symbolic", "Next episode (N)");
         next_button.set_visible(false);
 
@@ -143,7 +153,13 @@ impl Controls {
             .build();
 
         let buttons = gtk::Box::builder().spacing(4).build();
-        for b in [&play_button, &back10, &forward30, &next_button] {
+        for b in [
+            &play_button,
+            &back10,
+            &forward30,
+            &previous_button,
+            &next_button,
+        ] {
             buttons.append(b);
         }
         let spacer = gtk::Box::builder().hexpand(true).build();
@@ -204,6 +220,7 @@ impl Controls {
             up_next.root.upcast_ref(),
             spinner.upcast_ref(),
             error.upcast_ref(),
+            seek_time.upcast_ref(),
         ] {
             overlay.add_overlay(child);
         }
@@ -217,8 +234,10 @@ impl Controls {
             play_button,
             back10,
             forward30,
+            previous_button,
             next_button,
             seek,
+            seek_time,
             position_label,
             duration_label,
             volume_button,
@@ -378,6 +397,7 @@ impl Player {
         on(&self.play_button, |p| p.toggle_pause());
         on(back10, |p| p.seek_by(-10.0));
         on(forward30, |p| p.seek_by(30.0));
+        on(&self.previous_button, |p| p.play_previous());
         on(&self.next_button, |p| p.play_next());
         on(&self.fullscreen_button, |p| p.toggle_fullscreen());
         on(mute, |p| p.toggle_mute());
@@ -395,35 +415,7 @@ impl Player {
             }
             glib::Propagation::Proceed
         });
-        // Hovering the seek bar shows the time there, and the chapter
-        self.seek.set_has_tooltip(true);
-        let weak = Rc::downgrade(self);
-        self.seek
-            .connect_query_tooltip(move |seek, x, _, keyboard, tooltip| {
-                let Some(p) = weak.upgrade() else {
-                    return false;
-                };
-                let trough = seek.range_rect();
-                let st = p.state.borrow();
-                if keyboard || st.duration <= 0.0 || trough.width() <= 0 {
-                    return false;
-                }
-                let time =
-                    ((x - trough.x()) as f64 / trough.width() as f64).clamp(0.0, 1.0) * st.duration;
-                let chapter = st
-                    .chapters
-                    .iter()
-                    .rev()
-                    .find(|(start, _)| *start <= time)
-                    .map(|(_, title)| title.as_str());
-                match chapter.filter(|c| !c.is_empty()) {
-                    Some(chapter) => {
-                        tooltip.set_text(Some(&format!("{} · {chapter}", format_time(time))))
-                    }
-                    None => tooltip.set_text(Some(&format_time(time))),
-                }
-                true
-            });
+        self.connect_seek_time();
         let weak = Rc::downgrade(self);
         self.volume_scale.connect_value_changed(move |scale| {
             if let Some(p) = weak.upgrade()
@@ -432,6 +424,38 @@ impl Player {
                 p.mpv_set("volume", &format!("{:.0}", scale.value()));
             }
         });
+    }
+
+    /// Hovering the seek bar shows the time under the pointer, over it
+    fn connect_seek_time(self: &Rc<Self>) {
+        let hover = gtk::EventControllerMotion::new();
+        let weak = Rc::downgrade(self);
+        hover.connect_enter(move |_, x, _| {
+            if let Some(p) = weak.upgrade() {
+                p.hover_seek(Some(x));
+            }
+        });
+        let weak = Rc::downgrade(self);
+        hover.connect_motion(move |_, x, _| {
+            if let Some(p) = weak.upgrade() {
+                p.hover_seek(Some(x));
+            }
+        });
+        let weak = Rc::downgrade(self);
+        hover.connect_leave(move |_| {
+            if let Some(p) = weak.upgrade() {
+                p.hover_seek(None);
+            }
+        });
+        self.seek.add_controller(hover);
+        let weak = Rc::downgrade(self);
+        self.overlay
+            .connect_get_child_position(move |overlay, child| {
+                let p = weak.upgrade()?;
+                (child == p.seek_time.upcast_ref::<gtk::Widget>())
+                    .then(|| p.seek_time_position(overlay))
+                    .flatten()
+            });
     }
 
     pub(super) fn connect_input(self: &Rc<Self>) {
@@ -466,6 +490,7 @@ impl Player {
                 Key::s | Key::S => p.cycle_track("sid"),
                 Key::a | Key::A => p.cycle_track("aid"),
                 Key::n | Key::N => p.play_next(),
+                Key::p | Key::P => p.play_previous(),
                 _ => return glib::Propagation::Proceed,
             }
             p.show_controls();
@@ -572,7 +597,16 @@ impl Player {
 
     pub(super) fn play_next(self: &Rc<Self>) {
         let next = self.state.borrow().next.clone();
-        if let Some(item) = next {
+        self.play_episode(next);
+    }
+
+    pub(super) fn play_previous(self: &Rc<Self>) {
+        let previous = self.state.borrow().previous.clone();
+        self.play_episode(previous);
+    }
+
+    fn play_episode(self: &Rc<Self>, episode: Option<api::Item>) {
+        if let Some(item) = episode {
             let start = item.resume_seconds();
             self.load(Media::Jellyfin {
                 item: Box::new(item),
@@ -634,6 +668,52 @@ impl Player {
             self.bottom.set_reveal_child(false);
             self.overlay.set_cursor_from_name(Some("none"));
         }
+    }
+
+    /// `x`: where the pointer is on the seek bar, if it is
+    fn hover_seek(&self, x: Option<f64>) {
+        self.state.borrow_mut().seek_pointer = x;
+        let text = {
+            let st = self.state.borrow();
+            let trough = self.seek.range_rect();
+            x.filter(|_| st.duration > 0.0 && trough.width() > 0)
+                .map(|x| {
+                    let time = ((x - trough.x() as f64) / trough.width() as f64).clamp(0.0, 1.0)
+                        * st.duration;
+                    match chapter_name(&st.chapters, time) {
+                        Some(chapter) => format!("{} · {chapter}", format_time(time)),
+                        None => format_time(time),
+                    }
+                })
+        };
+        match text {
+            Some(text) => {
+                self.seek_time.set_label(&text);
+                self.seek_time.set_visible(true);
+                // Its place follows the pointer: see seek_time_position
+                self.overlay.queue_allocate();
+            }
+            None => self.seek_time.set_visible(false),
+        }
+    }
+
+    /// Above the seek bar, centred on the pointer (and inside the player)
+    fn seek_time_position(&self, overlay: &gtk::Overlay) -> Option<gdk::Rectangle> {
+        let x = self.state.borrow().seek_pointer?;
+        let trough = self.seek.range_rect();
+        let x = x.clamp(trough.x() as f64, (trough.x() + trough.width()) as f64);
+        let at = self
+            .seek
+            .compute_point(overlay, &graphene::Point::new(x as f32, trough.y() as f32))?;
+        let (_, size) = self.seek_time.preferred_size();
+        let (width, height) = (size.width(), size.height());
+        let left = (at.x() as i32 - width / 2).clamp(0, (overlay.width() - width).max(0));
+        Some(gdk::Rectangle::new(
+            left,
+            at.y() as i32 - height - 10,
+            width,
+            height,
+        ))
     }
 
     pub(super) fn update_time(&self) {

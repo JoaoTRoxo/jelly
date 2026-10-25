@@ -8,10 +8,18 @@ All notable changes to Jelly are recorded here. The format follows
 
 ### Added
 
+- A button to go back to the previous episode, next to the next episode's
+  (or P).
 - The audio and subtitles picked in an episode are picked again in the
   show's other episodes: the same language, and the same track among
   several in it ("Dialogue" rather than "Signs/Songs"). They're kept per
   show in `settings.json`.
+
+### Fixed
+
+- The time shown over the seek bar follows the pointer, and leaves out
+  chapters that are only numbered ("Chapter 01"): a chapter shows only
+  when it has a name.
 
 ## [0.3.0] - 2026-10-23
 
