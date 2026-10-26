@@ -6,6 +6,12 @@ All notable changes to Jelly are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The player no longer has buttons to go back 10 s and forward 30 s, which
+  cluttered its controls: J and L still go back and forward 10 s, and the
+  arrows 5 s.
+
 ### Fixed
 
 - A and S work with a menu open, as meant: A closes the audio menu, and

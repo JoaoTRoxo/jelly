@@ -308,8 +308,6 @@ impl Player {
             subtitle,
             back,
             play_button,
-            back10,
-            forward30,
             previous_button,
             next_button,
             seek,
@@ -388,7 +386,7 @@ impl Player {
         });
 
         player.connect_video();
-        player.connect_controls(&back, &back10, &forward30, &mute_button, &error_back);
+        player.connect_controls(&back, &mute_button, &error_back);
         player.connect_input();
 
         let weak = Rc::downgrade(&player);
