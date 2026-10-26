@@ -129,11 +129,11 @@ impl Controls {
             .orientation(gtk::Orientation::Vertical)
             .spacing(2)
             .build();
-        let audio_button = menu_button(
-            "audio-x-generic-symbolic",
-            "Audio (A)",
-            &scrolling(&audio_list),
-        );
+        // Adwaita's audio-x-generic-symbolic, under a name of Jelly's own: a
+        // theme without it (KDE's Breeze) gave its file type's icon instead,
+        // in a fixed colour
+        let audio_button =
+            menu_button("jelly-audio-symbolic", "Audio (A)", &scrolling(&audio_list));
         let subs_list = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
             .spacing(2)
@@ -468,63 +468,21 @@ impl Player {
     }
 
     pub(super) fn connect_input(self: &Rc<Self>) {
-        let keys = gtk::EventControllerKey::new();
-        keys.set_propagation_phase(gtk::PropagationPhase::Capture);
-        let weak = Rc::downgrade(self);
-        keys.connect_key_pressed(move |_, key, _, modifiers| {
-            let Some(p) = weak.upgrade() else {
-                return glib::Propagation::Proceed;
-            };
-            // The player's keys while it's on screen, with the focus in it or
-            // nowhere (not in a dialog over it, say)
-            let focus = p.page.root().and_then(|root| root.focus());
-            if !p.page.is_mapped() || focus.is_some_and(|f| !f.is_ancestor(&p.page)) {
-                return glib::Propagation::Proceed;
-            }
-            if modifiers.intersects(gdk::ModifierType::CONTROL_MASK | gdk::ModifierType::ALT_MASK) {
-                return glib::Propagation::Proceed;
-            }
-            use gdk::Key;
-            // With a menu open, the keys move and pick in it (A and S close it)
-            let menus = [&p.volume_button, &p.audio_button, &p.subs_button];
-            if menus.iter().any(|b| b.is_active())
-                && !matches!(key, Key::a | Key::A | Key::s | Key::S)
-            {
-                return glib::Propagation::Proceed;
-            }
-            match key {
-                Key::space | Key::k | Key::K => p.toggle_pause(),
-                Key::Left => p.seek_by(-5.0),
-                Key::Right => p.seek_by(5.0),
-                Key::j | Key::J => p.seek_by(-10.0),
-                Key::l | Key::L => p.seek_by(10.0),
-                Key::Up => p.change_volume(5.0),
-                Key::Down => p.change_volume(-5.0),
-                Key::f | Key::F | Key::F11 => p.toggle_fullscreen(),
-                Key::Escape => {
-                    if p.window().is_some_and(|w| w.is_fullscreen()) {
-                        p.toggle_fullscreen();
-                    } else {
-                        p.close();
-                    }
-                }
-                Key::m | Key::M => p.toggle_mute(),
-                Key::s | Key::S => p.toggle_menu(&p.subs_button),
-                Key::a | Key::A => p.toggle_menu(&p.audio_button),
-                Key::n | Key::N => p.play_next(),
-                Key::p | Key::P => p.play_previous(),
-                _ => return glib::Propagation::Proceed,
-            }
-            p.show_controls();
-            glib::Propagation::Stop
-        });
         // On the window, not the page: with nothing focused, as when the
         // player opens, keys go to the window alone, and an arrow key had to
         // focus a button before any other key worked
+        let keys = self.key_controller();
         if let Some(window) = self.window() {
             window.add_controller(keys.clone());
         }
         *self.keys.borrow_mut() = Some(keys);
+        // An open menu grabs the keys (GTK's popover grab): they no longer
+        // reach the window, so each menu has the keys too, for A and S
+        for menu in [&self.volume_button, &self.audio_button, &self.subs_button] {
+            if let Some(popover) = menu.popover() {
+                popover.add_controller(self.key_controller());
+            }
+        }
 
         let motion = gtk::EventControllerMotion::new();
         let weak = Rc::downgrade(self);
@@ -575,6 +533,67 @@ impl Player {
             }
         });
         self.area.add_controller(click);
+    }
+
+    fn key_controller(self: &Rc<Self>) -> gtk::EventControllerKey {
+        let keys = gtk::EventControllerKey::new();
+        keys.set_propagation_phase(gtk::PropagationPhase::Capture);
+        let weak = Rc::downgrade(self);
+        keys.connect_key_pressed(move |_, key, _, modifiers| {
+            weak.upgrade().map_or(glib::Propagation::Proceed, |p| {
+                p.key_pressed(key, modifiers)
+            })
+        });
+        keys
+    }
+
+    fn key_pressed(
+        self: &Rc<Self>,
+        key: gdk::Key,
+        modifiers: gdk::ModifierType,
+    ) -> glib::Propagation {
+        // The player's keys while it's on screen, with the focus in it or
+        // nowhere (not in a dialog over it, say)
+        let focus = self.page.root().and_then(|root| root.focus());
+        if !self.page.is_mapped() || focus.is_some_and(|f| !f.is_ancestor(&self.page)) {
+            return glib::Propagation::Proceed;
+        }
+        if modifiers.intersects(gdk::ModifierType::CONTROL_MASK | gdk::ModifierType::ALT_MASK) {
+            return glib::Propagation::Proceed;
+        }
+        use gdk::Key;
+        // With a menu open, the keys move and pick in it, but A and S still
+        // switch menus: their own closes, the other one opens in its place
+        let menus = [&self.volume_button, &self.audio_button, &self.subs_button];
+        if menus.iter().any(|b| b.is_active()) && !matches!(key, Key::a | Key::A | Key::s | Key::S)
+        {
+            return glib::Propagation::Proceed;
+        }
+        match key {
+            Key::space | Key::k | Key::K => self.toggle_pause(),
+            Key::Left => self.seek_by(-5.0),
+            Key::Right => self.seek_by(5.0),
+            Key::j | Key::J => self.seek_by(-10.0),
+            Key::l | Key::L => self.seek_by(10.0),
+            Key::Up => self.change_volume(5.0),
+            Key::Down => self.change_volume(-5.0),
+            Key::f | Key::F | Key::F11 => self.toggle_fullscreen(),
+            Key::Escape => {
+                if self.window().is_some_and(|w| w.is_fullscreen()) {
+                    self.toggle_fullscreen();
+                } else {
+                    self.close();
+                }
+            }
+            Key::m | Key::M => self.toggle_mute(),
+            Key::s | Key::S => self.toggle_menu(&self.subs_button),
+            Key::a | Key::A => self.toggle_menu(&self.audio_button),
+            Key::n | Key::N => self.play_next(),
+            Key::p | Key::P => self.play_previous(),
+            _ => return glib::Propagation::Proceed,
+        }
+        self.show_controls();
+        glib::Propagation::Stop
     }
 
     // ---- controls ----

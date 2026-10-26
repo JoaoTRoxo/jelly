@@ -12,6 +12,15 @@ All notable changes to Jelly are recorded here. The format follows
   cluttered its controls: J and L still go back and forward 10 s, and the
   arrows 5 s.
 
+### Fixed
+
+- A and S work with a menu open, as meant: A closes the audio menu, and
+  opens it in place of the subtitle menu (S likewise). An open menu kept the
+  keys to itself.
+- The audio button is white like the others with icon themes that have no
+  monochrome music note, such as KDE's Breeze, which drew it in a fixed
+  blue-grey. Jelly now brings its own.
+
 ## [0.4.0] - 2026-10-25
 
 ### Added
