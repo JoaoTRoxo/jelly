@@ -6,6 +6,8 @@ All notable changes to Jelly are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-26
+
 ### Changed
 
 - The player no longer has buttons to go back 10 s and forward 30 s, which
@@ -125,7 +127,8 @@ The first release.
 - Releases for Linux (a tarball that uses the system's GTK, libadwaita and
   libmpv) and Windows (a folder that runs without installing anything).
 
-[Unreleased]: https://github.com/JoaoTRoxo/jelly/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/JoaoTRoxo/jelly/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/JoaoTRoxo/jelly/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/JoaoTRoxo/jelly/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/JoaoTRoxo/jelly/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/JoaoTRoxo/jelly/compare/v0.1.0...v0.2.0

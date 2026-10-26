@@ -66,6 +66,15 @@
   </branding>
 
   <releases>
+    <release version="0.4.1" date="2026-10-26">
+      <description>
+        <ul>
+          <li>A and S switch between the audio and subtitle menus, and close them</li>
+          <li>The audio button is white with icon themes like KDE's Breeze</li>
+          <li>No buttons to go back 10 s and forward 30 s: the keys do it</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.4.0" date="2026-10-25">
       <description>
         <ul>
