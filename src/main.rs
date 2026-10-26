@@ -54,6 +54,12 @@ fn main() -> glib::ExitCode {
         }
     }
 
+    // Jelly's own icons (build.rs), which GtkApplication adds to the icon
+    // theme from /io/github/joaotroxo/Jelly/icons
+    if let Err(e) = gio::resources_register_include!("jelly.gresource") {
+        eprintln!("jelly: {e}");
+    }
+
     // The rest go to the app: this process's, or the one already running,
     // which gets them over D-Bus while this process waits to hear how it went
     // On Windows, every process is an app of its own: GLib's D-Bus there is a

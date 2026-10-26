@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Built into jelly by build.rs. GtkApplication adds the icons folder to
+     the icon theme -->
+<gresources>
+  <gresource prefix="/io/github/joaotroxo/Jelly">
+    <file>icons/scalable/actions/jelly-audio-symbolic.svg</file>
+  </gresource>
+</gresources>
