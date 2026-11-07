@@ -732,6 +732,7 @@ impl Player {
         self.top.set_reveal_child(true);
         self.bottom.set_reveal_child(true);
         self.overlay.set_cursor(None);
+        self.place_subtitles();
     }
 
     pub(super) fn tick(&self) {
@@ -753,6 +754,7 @@ impl Player {
             self.top.set_reveal_child(false);
             self.bottom.set_reveal_child(false);
             self.overlay.set_cursor_from_name(Some("none"));
+            self.place_subtitles();
         }
     }
 

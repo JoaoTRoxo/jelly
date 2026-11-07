@@ -4,6 +4,7 @@
 //! the credits are over a screen counts down to the next episode.
 
 mod choice;
+mod clearance;
 mod controls;
 mod offers;
 mod picks;
@@ -16,6 +17,7 @@ use crate::api;
 use crate::mpv::{self, EndReason, Event, Format, Mpv, Renderer, Value};
 use crate::session;
 use adw::prelude::*;
+use clearance::{SubLayout, SubPositions};
 use controls::{Controls, NextScreen};
 use gtk::glib;
 use std::cell::{Cell, RefCell};
@@ -180,6 +182,9 @@ pub struct Player {
     mpv: RefCell<Option<Mpv>>,
     renderer: RefCell<Option<Renderer>>,
     second: stacking::Second,
+    sub_layout: SubLayout,
+    /// Where mpv draws the subtitles now: see place_subtitles
+    sub_positions: Cell<SubPositions>,
     top: gtk::Revealer,
     bottom: gtk::Revealer,
     title: gtk::Label,
@@ -297,6 +302,10 @@ fn start_mpv(volume: f64) -> Result<Mpv, String> {
         ("seeking", Format::Flag),
         ("volume", Format::Double),
         ("mute", Format::Flag),
+        // The area's size and the video's black borders, and the kind of
+        // subtitles: where they go, clear of the controls
+        ("osd-dimensions", Format::None),
+        ("current-tracks/sub/codec", Format::None),
         ("aid", Format::Str),
         ("sid", Format::Str),
         ("secondary-sid", Format::Str),
@@ -304,7 +313,6 @@ fn start_mpv(volume: f64) -> Result<Mpv, String> {
         ("secondary-sub-text", Format::Str),
         ("sub-text", Format::Str),
         ("sub-pos", Format::Double),
-        ("osd-dimensions", Format::None),
     ] {
         mpv.observe(name, format);
     }
@@ -315,6 +323,7 @@ impl Player {
     fn new(ctx: &Rc<Ctx>) -> Result<Rc<Player>, String> {
         let volume = session::settings().volume;
         let mut mpv = start_mpv(volume)?;
+        let sub_layout = SubLayout::read(&mpv);
         let area = gtk::GLArea::builder().hexpand(true).vexpand(true).build();
         let second = stacking::Second::new();
         let Controls {
@@ -360,6 +369,8 @@ impl Player {
             mpv: RefCell::new(None),
             renderer: RefCell::new(None),
             second,
+            sub_positions: Cell::new(sub_layout.usual),
+            sub_layout,
             top,
             bottom,
             title,
@@ -691,6 +702,8 @@ impl Player {
         self.title.set_label(title);
         self.subtitle.set_label(subtitle);
         self.subtitle.set_visible(!subtitle.is_empty());
+        // The top bar is a line shorter without one
+        self.place_subtitles();
     }
 
     fn show_error(&self, message: &str) {
@@ -844,6 +857,10 @@ impl Player {
                 self.state.borrow_mut().seeking = seeking;
                 self.update_spinner();
             }
+            ("osd-dimensions" | "current-tracks/sub/codec", _) => {
+                self.place_subtitles();
+                self.stack_second();
+            }
             ("volume", Value::Double(v)) => {
                 self.state.borrow_mut().volume = v;
                 self.updating.set(true);
@@ -861,7 +878,7 @@ impl Player {
             }
             ("secondary-sub-text", Value::Str(text)) => self.second_text(Some(&text)),
             ("secondary-sub-text", _) => self.second_text(None),
-            ("sub-text" | "sub-pos" | "osd-dimensions", _) => self.stack_second(),
+            ("sub-text" | "sub-pos", _) => self.stack_second(),
             _ => {}
         }
     }

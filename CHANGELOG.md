@@ -18,6 +18,16 @@ All notable changes to Jelly are recorded here. The format follows
   subtitles no longer change with the audio's language: the two were
   picked to go together.
 
+### Changed
+
+- The player's controls no longer cover the subtitles. While they're shown,
+  as they are all the time the video is paused, the subtitles move up above
+  the seek bar and buttons, second subtitles with them (or, at the top of
+  the video, down below the title), and they go back once the controls
+  hide. ASS signs stay where they are, and subtitles drawn in the video's
+  picture (ASS, PGS) move only as far as its black borders don't already
+  keep them clear.
+
 ### Fixed
 
 - The arrow keys in the audio and subtitle menus only move, and Enter or
