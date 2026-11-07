@@ -40,6 +40,15 @@ fn main() -> glib::ExitCode {
         // SAFETY: no other thread is running yet to read the environment
         unsafe { std::env::set_var("JELLY_MPV_LOG", "all=warn") };
     }
+    // glibc gives threads their own pools of memory, up to 8 per core, so
+    // each new video's cache could go to a fresh pool while the last one's
+    // sat unused: a few episodes in a row grew Jelly by hundreds of MB. With
+    // two pools it stays the same size
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    // SAFETY: only changes a setting of glibc's malloc
+    unsafe {
+        libc::mallopt(libc::M_ARENA_MAX, 2);
+    }
     let args: Vec<String> = std::env::args().collect();
     // Commands that only print run here, without the app
     match cli::parse(&args[1..]) {

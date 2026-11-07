@@ -270,9 +270,14 @@ fn start_mpv(volume: f64) -> Result<Mpv, String> {
         ("osd-bar", "no"),
         ("sub-auto", "no"),
         ("audio-file-auto", "no"),
+        // Held in memory: a minute of the stream ahead (at most 150 MiB, for
+        // high bitrates), and 32 MiB behind for going back
         ("cache", "yes"),
-        ("demuxer-max-bytes", "300MiB"),
-        ("demuxer-max-back-bytes", "100MiB"),
+        ("cache-secs", "60"),
+        ("demuxer-max-bytes", "150MiB"),
+        ("demuxer-max-back-bytes", "32MiB"),
+        // Otherwise what's behind grows into the room left ahead
+        ("demuxer-donate-buffer", "no"),
         ("network-timeout", "30"),
         // mpv takes any certificate unless told otherwise, and its requests
         // carry the Jellyfin token
@@ -317,6 +322,16 @@ fn start_mpv(volume: f64) -> Result<Mpv, String> {
         mpv.observe(name, format);
     }
     Ok(mpv)
+}
+
+/// Hand what mpv freed (its cache, mostly) back to the system: glibc keeps
+/// freed memory for reuse, so a closed player otherwise kept its size
+fn give_back_memory() {
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    // SAFETY: only returns glibc's free memory to the system
+    gtk::gio::spawn_blocking(|| unsafe {
+        libc::malloc_trim(0);
+    });
 }
 
 impl Player {
@@ -899,6 +914,7 @@ impl Player {
             drop(renderer);
         }
         self.mpv.borrow_mut().take();
+        give_back_memory();
         if let Some(ctx) = self.ctx.upgrade() {
             if let Some(handler) = self.fullscreen_handler.borrow_mut().take() {
                 ctx.window.disconnect(handler);

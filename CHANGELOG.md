@@ -28,11 +28,21 @@ All notable changes to Jelly are recorded here. The format follows
   picture (ASS, PGS) move only as far as its black borders don't already
   keep them clear.
 
+- The player uses far less memory: about 450 MB while playing a 1080p
+  video, where it used 650 to 750 MB. It keeps a minute of the video ahead
+  (at most 150 MiB) and 32 MiB behind, where it kept up to 300 MiB and
+  100 MiB. A `demuxer-max-bytes` or `cache-secs` in `mpv.conf` still asks
+  for more.
+
 ### Fixed
 
 - The arrow keys in the audio and subtitle menus only move, and Enter or
   Space picks: they picked each track they went past. After a pick, the
   menu stays on it.
+
+- On Linux, Jelly no longer grows by hundreds of MB with each video played
+  (it passed 1.5 GB after five), and it gives the memory back when the
+  player closes.
 
 ## [0.4.1] - 2026-10-26
 
