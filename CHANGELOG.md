@@ -39,6 +39,8 @@ All notable changes to Jelly are recorded here. The format follows
   (at most 150 MiB) and 32 MiB behind, where it kept up to 300 MiB and
   100 MiB. A `demuxer-max-bytes` or `cache-secs` in `mpv.conf` still asks
   for more.
+- The player's controls hide after 1.5 s without the pointer moving, where
+  they waited 3 s.
 
 ### Fixed
 

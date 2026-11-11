@@ -24,7 +24,7 @@ use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak};
 use std::time::{Duration, Instant};
 
-const HIDE_CONTROLS_AFTER: Duration = Duration::from_secs(3);
+const HIDE_CONTROLS_AFTER: Duration = Duration::from_millis(1500);
 const REPORT_EVERY: Duration = Duration::from_secs(10);
 /// How often the controls and the next episode's countdown are looked at
 const TICK: Duration = Duration::from_millis(250);
