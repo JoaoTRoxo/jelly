@@ -44,6 +44,9 @@ pub struct Settings {
 pub struct ShowTracks {
     pub audio: Option<Track>,
     pub subtitles: Option<Subtitles>,
+    /// The second subtitles, shown on top (None: off)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub second_subtitles: Option<Track>,
 }
 
 /// A track, as told apart from the others in an episode

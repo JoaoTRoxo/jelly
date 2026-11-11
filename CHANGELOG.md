@@ -6,6 +6,24 @@ All notable changes to Jelly are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Second subtitles, smaller and just above the first ones at the bottom of
+  the video, to read two languages at once (Japanese and English, say): pick
+  them under Second Subtitles in the subtitle menu. They follow the first
+  ones' size and place, whatever their style, and over black borders. They
+  can be any text subtitles, not pictures (PGS, DVD's), which mpv draws
+  where the first ones are. Like the others, they're picked again in the
+  show's other episodes, and kept in `settings.json`. While they're on, the
+  subtitles no longer change with the audio's language: the two were
+  picked to go together.
+
+### Fixed
+
+- The arrow keys in the audio and subtitle menus only move, and Enter or
+  Space picks: they picked each track they went past. After a pick, the
+  menu stays on it.
+
 ## [0.4.1] - 2026-10-26
 
 ### Changed

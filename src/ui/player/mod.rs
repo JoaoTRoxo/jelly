@@ -3,10 +3,12 @@
 //! playing"), intro, recap and credits segments get a skip button, and once
 //! the credits are over a screen counts down to the next episode.
 
+mod choice;
 mod controls;
 mod offers;
 mod picks;
 mod report;
+mod stacking;
 mod tracks;
 
 use super::Ctx;
@@ -72,7 +74,12 @@ pub fn shutdown_current() {
 struct Track {
     kind: String,
     id: i64,
+    /// Playing (subtitles: as the first ones)
     selected: bool,
+    /// Shown as the second subtitles, on top
+    second: bool,
+    /// Subtitles drawn as pictures
+    image: bool,
     label: String,
     jellyfin_index: Option<i32>,
 }
@@ -172,6 +179,7 @@ pub struct Player {
     area: gtk::GLArea,
     mpv: RefCell<Option<Mpv>>,
     renderer: RefCell<Option<Renderer>>,
+    second: stacking::Second,
     top: gtk::Revealer,
     bottom: gtk::Revealer,
     title: gtk::Label,
@@ -278,6 +286,9 @@ fn start_mpv(volume: f64) -> Result<Mpv, String> {
     let extra = std::env::var("JELLY_MPV_OPTIONS").unwrap_or_default();
     options.extend(extra.split(',').filter_map(|kv| kv.split_once('=')));
     let mpv = Mpv::new(&options)?;
+    // Jelly draws the second subtitles (see stacking): mpv decodes them.
+    // Set once started: an older mpv without the option would fail to start
+    let _ = mpv.set("secondary-sub-visibility", "no");
     for (name, format) in [
         ("time-pos", Format::Double),
         ("duration", Format::Double),
@@ -288,7 +299,12 @@ fn start_mpv(volume: f64) -> Result<Mpv, String> {
         ("mute", Format::Flag),
         ("aid", Format::Str),
         ("sid", Format::Str),
+        ("secondary-sid", Format::Str),
         ("track-list", Format::None),
+        ("secondary-sub-text", Format::Str),
+        ("sub-text", Format::Str),
+        ("sub-pos", Format::Double),
+        ("osd-dimensions", Format::None),
     ] {
         mpv.observe(name, format);
     }
@@ -300,6 +316,7 @@ impl Player {
         let volume = session::settings().volume;
         let mut mpv = start_mpv(volume)?;
         let area = gtk::GLArea::builder().hexpand(true).vexpand(true).build();
+        let second = stacking::Second::new();
         let Controls {
             overlay,
             top,
@@ -328,7 +345,7 @@ impl Player {
             spinner,
             error,
             error_back,
-        } = Controls::new(&area);
+        } = Controls::new(&area, &second.label);
 
         let page = adw::NavigationPage::builder()
             .title("Player")
@@ -342,6 +359,7 @@ impl Player {
             area,
             mpv: RefCell::new(None),
             renderer: RefCell::new(None),
+            second,
             top,
             bottom,
             title,
@@ -387,6 +405,7 @@ impl Player {
 
         player.connect_video();
         player.connect_controls(&back, &mute_button, &error_back);
+        player.connect_second();
         player.connect_input();
 
         let weak = Rc::downgrade(&player);
@@ -716,21 +735,17 @@ impl Player {
         // Jellyfin's choice of tracks follows the user's language settings,
         // unless others were picked in the show
         let picked = self.show_picks();
-        let defaults = self
-            .state
-            .borrow()
-            .playing
-            .as_ref()
-            .map(|p| picks::streams(&p.source, picked.as_ref()));
-        if let Some((audio, subtitle)) = defaults {
+        let defaults = self.state.borrow().playing.as_ref().map(|p| {
+            let (audio, subtitles) = picks::streams(&p.source, picked.as_ref());
+            let second = picks::second_subtitles(&p.source, picked.as_ref(), subtitles);
+            (audio, subtitles, second)
+        });
+        if let Some((audio, subtitles, second)) = defaults {
             let find = |kind, index: Option<i32>| index.and_then(|i| self.mpv_track(kind, i));
             if let Some(id) = find("audio", audio) {
                 self.mpv_set("aid", &id.to_string());
             }
-            match find("sub", subtitle) {
-                Some(id) => self.mpv_set("sid", &id.to_string()),
-                None => self.mpv_set("sid", "no"),
-            }
+            self.show_subtitles(find("sub", subtitles), find("sub", second));
         }
         let first_start = {
             let mut st = self.state.borrow_mut();
@@ -840,7 +855,13 @@ impl Player {
                 self.state.borrow_mut().muted = muted;
                 self.update_volume_icon();
             }
-            ("aid" | "sid" | "track-list", _) => self.refresh_tracks(),
+            ("aid" | "sid" | "secondary-sid" | "track-list", _) => {
+                self.refresh_tracks();
+                self.stack_second();
+            }
+            ("secondary-sub-text", Value::Str(text)) => self.second_text(Some(&text)),
+            ("secondary-sub-text", _) => self.second_text(None),
+            ("sub-text" | "sub-pos" | "osd-dimensions", _) => self.stack_second(),
             _ => {}
         }
     }

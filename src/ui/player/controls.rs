@@ -45,8 +45,8 @@ pub struct Controls {
 }
 
 impl Controls {
-    /// Built over `area`, the video
-    pub fn new(area: &gtk::GLArea) -> Controls {
+    /// Built over `area`, the video, and `second`, its second subtitles
+    pub fn new(area: &gtk::GLArea, second: &gtk::Label) -> Controls {
         let overlay = gtk::Overlay::builder()
             .child(area)
             .css_classes(["player"])
@@ -207,9 +207,11 @@ impl Controls {
             .visible(false)
             .build();
 
-        // The next episode's screen under the controls, which still work over it
+        // The second subtitles as if in the video, then the next episode's
+        // screen under the controls, which still work over it
         for child in [
-            up_next.root.upcast_ref::<gtk::Widget>(),
+            second.upcast_ref::<gtk::Widget>(),
+            up_next.root.upcast_ref(),
             top.upcast_ref(),
             bottom.upcast_ref(),
             skip_button.upcast_ref(),
