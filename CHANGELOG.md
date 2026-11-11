@@ -6,6 +6,8 @@ All notable changes to Jelly are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-11
+
 ### Added
 
 - Second subtitles, smaller and just above the first ones at the bottom of
@@ -36,7 +38,6 @@ All notable changes to Jelly are recorded here. The format follows
   hide. ASS signs stay where they are, and subtitles drawn in the video's
   picture (ASS, PGS) move only as far as its black borders don't already
   keep them clear.
-
 - The player uses far less memory: about 450 MB while playing a 1080p
   video, where it used 650 to 750 MB. It keeps a minute of the video ahead
   (at most 150 MiB) and 32 MiB behind, where it kept up to 300 MiB and
@@ -50,7 +51,6 @@ All notable changes to Jelly are recorded here. The format follows
 - The arrow keys in the audio and subtitle menus only move, and Enter or
   Space picks: they picked each track they went past. After a pick, the
   menu stays on it.
-
 - On Linux, Jelly no longer grows by hundreds of MB with each video played
   (it passed 1.5 GB after five), and it gives the memory back when the
   player closes.
@@ -176,7 +176,8 @@ The first release.
 - Releases for Linux (a tarball that uses the system's GTK, libadwaita and
   libmpv) and Windows (a folder that runs without installing anything).
 
-[Unreleased]: https://github.com/JoaoTRoxo/jelly/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/JoaoTRoxo/jelly/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/JoaoTRoxo/jelly/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/JoaoTRoxo/jelly/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/JoaoTRoxo/jelly/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/JoaoTRoxo/jelly/compare/v0.2.0...v0.3.0
