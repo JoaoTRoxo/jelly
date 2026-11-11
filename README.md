@@ -185,7 +185,9 @@ in `%LOCALAPPDATA%\Microsoft\Windows\INetCache\jelly`. The setup installs
 Jelly itself in `%LOCALAPPDATA%\io.github.joaotroxo.Jelly`.
 
 When it starts, Jelly asks GitHub for its latest release, to update or to say
-there's a new one.
+there's a new one. The first time it opens after an update, it shows what's
+new, from the changelog it was built with, and keeps the version in
+`settings.json` (`last_version`) so it only does once.
 
 ## Troubleshooting
 

@@ -179,6 +179,7 @@ fn window(app: &adw::Application, sign_in: bool) -> Rc<ui::Ctx> {
         });
     }
     ctx.window.present();
+    ui::news::after_update(&ctx);
     #[cfg(feature = "screenshot")]
     shot::schedule(&ctx.window);
     // Not while making screenshots, which a toast would cover

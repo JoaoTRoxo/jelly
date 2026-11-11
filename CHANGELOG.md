@@ -23,6 +23,9 @@ All notable changes to Jelly are recorded here. The format follows
   movie. The menu now opens for videos without subtitles too. Accounts need
   Seerr's Report Issues permission for this, which Seerr doesn't give by
   default.
+- What's New: the first time Jelly opens after an update, a window shows
+  what the new version adds and what it adjusts (these notes). Not on the
+  first start, and only once.
 
 ### Changed
 

@@ -5,6 +5,7 @@ pub mod home;
 pub mod item;
 pub mod library;
 pub mod login;
+pub mod news;
 pub mod player;
 pub mod request;
 

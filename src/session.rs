@@ -37,6 +37,8 @@ pub struct Settings {
     /// The tracks last picked in each show (by its Jellyfin id), to pick
     /// again in its other episodes
     pub show_tracks: HashMap<String, ShowTracks>,
+    /// The version that last ran, to say what's new after an update
+    pub last_version: String,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -73,6 +75,7 @@ impl Default for Settings {
             volume: 100.0,
             seerr_url: String::new(),
             show_tracks: HashMap::new(),
+            last_version: String::new(),
         }
     }
 }
@@ -132,6 +135,11 @@ pub fn save_seerr(session: &SeerrSession) {
 
 pub fn clear_seerr() {
     let _ = fs::remove_file(config_dir().join("seerr.json"));
+}
+
+/// Whether there are settings saved: none on the first start
+pub fn has_settings() -> bool {
+    config_dir().join("settings.json").is_file()
 }
 
 pub fn settings() -> Settings {
