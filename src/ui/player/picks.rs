@@ -1,5 +1,6 @@
-//! The audio and subtitles picked in a show, picked again in its other
-//! episodes, and subtitles that follow a switch of the audio's language.
+//! The audio and subtitles (and second subtitles) picked in a show, picked
+//! again in its other episodes, and subtitles that follow a switch of the
+//! audio's language (unless there are second ones: the two go together).
 //! Jellyfin's own choice follows the account's languages (often unset), and
 //! remembers a pick only for the episode it was made in.
 
@@ -28,12 +29,30 @@ pub(super) fn streams(
         Some(Subtitles::On(track)) => {
             like(track, &source.media_streams, "Subtitle", subtitles).or(subtitles)
         }
+        // Second ones picked with Jellyfin's: those
+        None if picked.second_subtitles.is_some() => subtitles,
         // Only the audio picked: the subtitles that go with it
         None => audio
             .and_then(|to| subtitles_after(source, source.default_audio_stream_index, to))
             .unwrap_or(subtitles),
     };
     (audio, subtitles)
+}
+
+/// The second subtitles (Jellyfin's index) to start with: the text ones most
+/// like those last picked in the show, unless they're the first ones
+/// (`first`). mpv draws pictures where they are, under the first ones.
+pub(super) fn second_subtitles(
+    source: &api::MediaSource,
+    picked: Option<&ShowTracks>,
+    first: Option<i32>,
+) -> Option<i32> {
+    let track = picked?.second_subtitles.as_ref()?;
+    let text = source
+        .media_streams
+        .iter()
+        .filter(|s| s.is_text_subtitle_stream);
+    like(track, text, "Subtitle", None).filter(|index| Some(*index) != first)
 }
 
 /// The subtitles after switching the audio from `from` to `to` (Jellyfin's
@@ -83,9 +102,9 @@ fn signs_only(stream: &api::MediaStream) -> bool {
 
 /// The stream most like `track`: in its language, then with its title,
 /// then Jellyfin's choice (`default`). None without one in its language.
-fn like(
+fn like<'a>(
     track: &Track,
-    streams: &[api::MediaStream],
+    streams: impl IntoIterator<Item = &'a api::MediaStream>,
     kind: &str,
     default: Option<i32>,
 ) -> Option<i32> {
@@ -95,7 +114,7 @@ fn like(
             .is_some_and(|(a, b)| a.eq_ignore_ascii_case(b))
     };
     streams
-        .iter()
+        .into_iter()
         .filter(|s| s.kind == kind)
         .filter(|s| track.language.is_none() || same(&s.language, &track.language))
         .max_by_key(|s| {
@@ -130,9 +149,13 @@ impl Player {
     }
 
     /// The audio switched from `from` (Jellyfin's index) to mpv's track `id`:
-    /// remember it, and bring the subtitles along (see subtitles_after)
+    /// remember it, and bring the subtitles along (see subtitles_after),
+    /// unless there are second ones, picked to go with them
     pub(super) fn audio_picked(&self, from: Option<i32>, id: Option<i64>) {
-        self.remember_pick("audio", id);
+        self.remember_pick("aid", id);
+        if self.subtitles_shown().1.is_some() {
+            return;
+        }
         let subtitles = {
             let st = self.state.borrow();
             let to = id.and_then(|id| {
@@ -154,8 +177,7 @@ impl Player {
                 None => return,
             },
         };
-        self.mpv_set("sid", &id.map_or("no".to_string(), |i| i.to_string()));
-        self.remember_pick("sub", id);
+        self.pick_subtitles("sid", id);
     }
 
     /// The tracks last picked in this episode's show
@@ -165,9 +187,10 @@ impl Player {
         session::settings().show_tracks.remove(show)
     }
 
-    /// Remember a track picked (by mpv's id, "audio" or "sub"; None: off)
-    /// for the show's other episodes
-    pub(super) fn remember_pick(&self, kind: &str, id: Option<i64>) {
+    /// Remember a track picked (by mpv's id, for "aid", "sid" or
+    /// "secondary-sid"; None: off) for the show's other episodes
+    pub(super) fn remember_pick(&self, property: &str, id: Option<i64>) {
+        let kind = if property == "aid" { "audio" } else { "sub" };
         let (show, track) = {
             let st = self.state.borrow();
             let Some(playing) = st.playing.as_ref() else {
@@ -200,9 +223,10 @@ impl Player {
         };
         let mut settings = session::settings();
         let picked = settings.show_tracks.entry(show).or_default();
-        match (kind, track) {
-            ("audio", Some(track)) => picked.audio = Some(track),
-            ("sub", track) => picked.subtitles = Some(track.map_or(Subtitles::Off, Subtitles::On)),
+        match (property, track) {
+            ("aid", Some(track)) => picked.audio = Some(track),
+            ("sid", track) => picked.subtitles = Some(track.map_or(Subtitles::Off, Subtitles::On)),
+            ("secondary-sid", track) => picked.second_subtitles = track,
             _ => return,
         }
         session::save_settings(&settings);
@@ -277,6 +301,7 @@ mod tests {
         let mut picked = ShowTracks {
             audio: Some(track("jpn", "")),
             subtitles: Some(Subtitles::On(track("eng", "Dialogue"))),
+            ..Default::default()
         };
         assert_eq!(streams(&source, Some(&picked)), (Some(2), Some(4)));
         picked.subtitles = Some(Subtitles::Off);
@@ -284,6 +309,11 @@ mod tests {
         // Picked only the audio: the subtitles that go with it
         picked.subtitles = None;
         assert_eq!(streams(&source, Some(&picked)), (Some(2), Some(4)));
+        // With second ones: not those that go with the audio, but Jellyfin's,
+        // which the second ones were picked to go with
+        picked.second_subtitles = Some(track("jpn", ""));
+        assert_eq!(streams(&source, Some(&picked)), (Some(2), Some(3)));
+        picked.second_subtitles = None;
         // A language this episode doesn't have
         picked.audio = Some(track("por", ""));
         assert_eq!(streams(&source, Some(&picked)), (Some(1), Some(3)));
@@ -333,21 +363,63 @@ mod tests {
 
     #[test]
     fn kept_in_the_settings() {
-        let picked = ShowTracks {
+        let mut picked = ShowTracks {
             audio: Some(track("jpn", "")),
             subtitles: Some(Subtitles::Off),
+            second_subtitles: None,
         };
         let json = serde_json::to_string(&picked).unwrap();
+        // Without second subtitles, as before them
         assert_eq!(
             json,
             r#"{"audio":{"language":"jpn","title":null},"subtitles":"off"}"#
         );
+        assert_eq!(serde_json::from_str::<ShowTracks>(&json).unwrap(), picked);
+        picked.second_subtitles = Some(track("eng", "Dialogue"));
+        let json = serde_json::to_string(&picked).unwrap();
+        assert!(json.ends_with(r#""second_subtitles":{"language":"eng","title":"Dialogue"}}"#));
         assert_eq!(serde_json::from_str::<ShowTracks>(&json).unwrap(), picked);
         let on = r#"{"subtitles":{"on":{"language":"eng","title":"Dialogue"}}}"#;
         assert_eq!(
             serde_json::from_str::<ShowTracks>(on).unwrap().subtitles,
             Some(Subtitles::On(track("eng", "Dialogue")))
         );
+    }
+
+    #[test]
+    fn second_subtitles_as_last_picked() {
+        // Japanese audio, English and Japanese subtitles, and Japanese PGS
+        let mut streams = vec![
+            stream(1, "Audio", "jpn", ""),
+            stream(2, "Subtitle", "eng", "Dialogue"),
+            stream(3, "Subtitle", "jpn", "Full"),
+            stream(4, "Subtitle", "jpn", "Blu-ray"),
+        ];
+        streams[1].is_text_subtitle_stream = true;
+        streams[2].is_text_subtitle_stream = true;
+        let source = api::MediaSource {
+            media_streams: streams,
+            default_audio_stream_index: Some(1),
+            default_subtitle_stream_index: Some(2),
+            ..Default::default()
+        };
+        let mut picked = ShowTracks {
+            subtitles: Some(Subtitles::On(track("jpn", "Full"))),
+            second_subtitles: Some(track("eng", "")),
+            ..Default::default()
+        };
+        assert_eq!(second_subtitles(&source, Some(&picked), Some(3)), Some(2));
+        // Never the same as the first ones
+        assert_eq!(second_subtitles(&source, Some(&picked), Some(2)), None);
+        // Text, not the pictures, even with their title
+        picked.second_subtitles = Some(track("jpn", "Blu-ray"));
+        assert_eq!(second_subtitles(&source, Some(&picked), Some(2)), Some(3));
+        // None picked, or a language this episode doesn't have
+        picked.second_subtitles = None;
+        assert_eq!(second_subtitles(&source, Some(&picked), Some(2)), None);
+        assert_eq!(second_subtitles(&source, None, Some(2)), None);
+        picked.second_subtitles = Some(track("por", ""));
+        assert_eq!(second_subtitles(&source, Some(&picked), Some(2)), None);
     }
 
     #[test]

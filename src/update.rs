@@ -127,7 +127,7 @@ fn latest_release() -> Option<Release> {
 }
 
 /// Whether `tag` (v0.3.0) is a later version than `current` (0.2.0)
-fn is_newer(tag: &str, current: &str) -> bool {
+pub fn is_newer(tag: &str, current: &str) -> bool {
     let numbers = |version: &str| -> Option<Vec<u64>> {
         let version = version.trim_start_matches('v');
         let release = version.split(['-', '+']).next()?;

@@ -1,6 +1,23 @@
 use super::*;
 
 #[test]
+fn asks_for_subtitles_with_an_issue() {
+    assert_eq!(
+        subtitles_issue(42, (3, 2), ("Portuguese (Brazil)", "pb")),
+        json!({
+            "issueType": 3,
+            "mediaId": 42,
+            "problemSeason": 3,
+            "problemEpisode": 2,
+            "message": "Requesting subtitles in Portuguese (Brazil) [pb].",
+        })
+    );
+    // Issues go by Seerr's number, which isn't TMDB's
+    let media: MediaInfo = serde_json::from_str(r#"{"id":42,"tmdbId":1399}"#).unwrap();
+    assert_eq!((media.id, media.tmdb_id), (42, 1399));
+}
+
+#[test]
 fn finds_seerr_next_to_jellyfin() {
     assert_eq!(
         default_url("http://192.0.2.7:8096"),

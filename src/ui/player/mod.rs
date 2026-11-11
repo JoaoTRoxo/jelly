@@ -3,10 +3,13 @@
 //! playing"), intro, recap and credits segments get a skip button, and once
 //! the credits are over a screen counts down to the next episode.
 
+mod choice;
+mod clearance;
 mod controls;
 mod offers;
 mod picks;
 mod report;
+mod stacking;
 mod tracks;
 
 use super::Ctx;
@@ -14,13 +17,14 @@ use crate::api;
 use crate::mpv::{self, EndReason, Event, Format, Mpv, Renderer, Value};
 use crate::session;
 use adw::prelude::*;
+use clearance::{SubLayout, SubPositions};
 use controls::{Controls, NextScreen};
 use gtk::glib;
 use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak};
 use std::time::{Duration, Instant};
 
-const HIDE_CONTROLS_AFTER: Duration = Duration::from_secs(3);
+const HIDE_CONTROLS_AFTER: Duration = Duration::from_millis(1500);
 const REPORT_EVERY: Duration = Duration::from_secs(10);
 /// How often the controls and the next episode's countdown are looked at
 const TICK: Duration = Duration::from_millis(250);
@@ -72,7 +76,12 @@ pub fn shutdown_current() {
 struct Track {
     kind: String,
     id: i64,
+    /// Playing (subtitles: as the first ones)
     selected: bool,
+    /// Shown as the second subtitles, on top
+    second: bool,
+    /// Subtitles drawn as pictures
+    image: bool,
     label: String,
     jellyfin_index: Option<i32>,
 }
@@ -172,6 +181,10 @@ pub struct Player {
     area: gtk::GLArea,
     mpv: RefCell<Option<Mpv>>,
     renderer: RefCell<Option<Renderer>>,
+    second: stacking::Second,
+    sub_layout: SubLayout,
+    /// Where mpv draws the subtitles now: see place_subtitles
+    sub_positions: Cell<SubPositions>,
     top: gtk::Revealer,
     bottom: gtk::Revealer,
     title: gtk::Label,
@@ -187,6 +200,7 @@ pub struct Player {
     audio_list: gtk::Box,
     subs_button: gtk::MenuButton,
     subs_list: gtk::Box,
+    request_subs: gtk::Button,
     previous_button: gtk::Button,
     next_button: gtk::Button,
     fullscreen_button: gtk::Button,
@@ -257,9 +271,14 @@ fn start_mpv(volume: f64) -> Result<Mpv, String> {
         ("osd-bar", "no"),
         ("sub-auto", "no"),
         ("audio-file-auto", "no"),
+        // Held in memory: a minute of the stream ahead (at most 150 MiB, for
+        // high bitrates), and 32 MiB behind for going back
         ("cache", "yes"),
-        ("demuxer-max-bytes", "300MiB"),
-        ("demuxer-max-back-bytes", "100MiB"),
+        ("cache-secs", "60"),
+        ("demuxer-max-bytes", "150MiB"),
+        ("demuxer-max-back-bytes", "32MiB"),
+        // Otherwise what's behind grows into the room left ahead
+        ("demuxer-donate-buffer", "no"),
         ("network-timeout", "30"),
         // mpv takes any certificate unless told otherwise, and its requests
         // carry the Jellyfin token
@@ -278,6 +297,9 @@ fn start_mpv(volume: f64) -> Result<Mpv, String> {
     let extra = std::env::var("JELLY_MPV_OPTIONS").unwrap_or_default();
     options.extend(extra.split(',').filter_map(|kv| kv.split_once('=')));
     let mpv = Mpv::new(&options)?;
+    // Jelly draws the second subtitles (see stacking): mpv decodes them.
+    // Set once started: an older mpv without the option would fail to start
+    let _ = mpv.set("secondary-sub-visibility", "no");
     for (name, format) in [
         ("time-pos", Format::Double),
         ("duration", Format::Double),
@@ -286,20 +308,40 @@ fn start_mpv(volume: f64) -> Result<Mpv, String> {
         ("seeking", Format::Flag),
         ("volume", Format::Double),
         ("mute", Format::Flag),
+        // The area's size and the video's black borders, and the kind of
+        // subtitles: where they go, clear of the controls
+        ("osd-dimensions", Format::None),
+        ("current-tracks/sub/codec", Format::None),
         ("aid", Format::Str),
         ("sid", Format::Str),
+        ("secondary-sid", Format::Str),
         ("track-list", Format::None),
+        ("secondary-sub-text", Format::Str),
+        ("sub-text", Format::Str),
+        ("sub-pos", Format::Double),
     ] {
         mpv.observe(name, format);
     }
     Ok(mpv)
 }
 
+/// Hand what mpv freed (its cache, mostly) back to the system: glibc keeps
+/// freed memory for reuse, so a closed player otherwise kept its size
+fn give_back_memory() {
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    // SAFETY: only returns glibc's free memory to the system
+    gtk::gio::spawn_blocking(|| unsafe {
+        libc::malloc_trim(0);
+    });
+}
+
 impl Player {
     fn new(ctx: &Rc<Ctx>) -> Result<Rc<Player>, String> {
         let volume = session::settings().volume;
         let mut mpv = start_mpv(volume)?;
+        let sub_layout = SubLayout::read(&mpv);
         let area = gtk::GLArea::builder().hexpand(true).vexpand(true).build();
+        let second = stacking::Second::new();
         let Controls {
             overlay,
             top,
@@ -321,6 +363,7 @@ impl Player {
             audio_list,
             subs_button,
             subs_list,
+            request_subs,
             fullscreen_button,
             ends,
             skip_button,
@@ -328,7 +371,7 @@ impl Player {
             spinner,
             error,
             error_back,
-        } = Controls::new(&area);
+        } = Controls::new(&area, &second.label);
 
         let page = adw::NavigationPage::builder()
             .title("Player")
@@ -342,6 +385,9 @@ impl Player {
             area,
             mpv: RefCell::new(None),
             renderer: RefCell::new(None),
+            second,
+            sub_positions: Cell::new(sub_layout.usual),
+            sub_layout,
             top,
             bottom,
             title,
@@ -357,6 +403,7 @@ impl Player {
             audio_list,
             subs_button,
             subs_list,
+            request_subs,
             previous_button,
             next_button,
             fullscreen_button,
@@ -387,6 +434,7 @@ impl Player {
 
         player.connect_video();
         player.connect_controls(&back, &mute_button, &error_back);
+        player.connect_second();
         player.connect_input();
 
         let weak = Rc::downgrade(&player);
@@ -672,6 +720,8 @@ impl Player {
         self.title.set_label(title);
         self.subtitle.set_label(subtitle);
         self.subtitle.set_visible(!subtitle.is_empty());
+        // The top bar is a line shorter without one
+        self.place_subtitles();
     }
 
     fn show_error(&self, message: &str) {
@@ -716,21 +766,17 @@ impl Player {
         // Jellyfin's choice of tracks follows the user's language settings,
         // unless others were picked in the show
         let picked = self.show_picks();
-        let defaults = self
-            .state
-            .borrow()
-            .playing
-            .as_ref()
-            .map(|p| picks::streams(&p.source, picked.as_ref()));
-        if let Some((audio, subtitle)) = defaults {
+        let defaults = self.state.borrow().playing.as_ref().map(|p| {
+            let (audio, subtitles) = picks::streams(&p.source, picked.as_ref());
+            let second = picks::second_subtitles(&p.source, picked.as_ref(), subtitles);
+            (audio, subtitles, second)
+        });
+        if let Some((audio, subtitles, second)) = defaults {
             let find = |kind, index: Option<i32>| index.and_then(|i| self.mpv_track(kind, i));
             if let Some(id) = find("audio", audio) {
                 self.mpv_set("aid", &id.to_string());
             }
-            match find("sub", subtitle) {
-                Some(id) => self.mpv_set("sid", &id.to_string()),
-                None => self.mpv_set("sid", "no"),
-            }
+            self.show_subtitles(find("sub", subtitles), find("sub", second));
         }
         let first_start = {
             let mut st = self.state.borrow_mut();
@@ -829,6 +875,10 @@ impl Player {
                 self.state.borrow_mut().seeking = seeking;
                 self.update_spinner();
             }
+            ("osd-dimensions" | "current-tracks/sub/codec", _) => {
+                self.place_subtitles();
+                self.stack_second();
+            }
             ("volume", Value::Double(v)) => {
                 self.state.borrow_mut().volume = v;
                 self.updating.set(true);
@@ -840,7 +890,13 @@ impl Player {
                 self.state.borrow_mut().muted = muted;
                 self.update_volume_icon();
             }
-            ("aid" | "sid" | "track-list", _) => self.refresh_tracks(),
+            ("aid" | "sid" | "secondary-sid" | "track-list", _) => {
+                self.refresh_tracks();
+                self.stack_second();
+            }
+            ("secondary-sub-text", Value::Str(text)) => self.second_text(Some(&text)),
+            ("secondary-sub-text", _) => self.second_text(None),
+            ("sub-text" | "sub-pos", _) => self.stack_second(),
             _ => {}
         }
     }
@@ -861,6 +917,7 @@ impl Player {
             drop(renderer);
         }
         self.mpv.borrow_mut().take();
+        give_back_memory();
         if let Some(ctx) = self.ctx.upgrade() {
             if let Some(handler) = self.fullscreen_handler.borrow_mut().take() {
                 ctx.window.disconnect(handler);

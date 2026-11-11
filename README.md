@@ -27,7 +27,8 @@ picture and sound exactly as they are.
 - **Playback** resumes where you left off on any device, picks the audio and
   subtitle tracks your Jellyfin language settings ask for (or, in a show,
   the ones you last picked in it), turns on subtitles when you switch to
-  audio in another language, and reports progress back. It offers to skip
+  audio in another language, can show second subtitles above the first (two
+  languages at once), and reports progress back. It offers to skip
   intros, recaps and credits, counts down to the next episode once the
   credits are over, marks chapters on the seek bar and shows when it will
   end
@@ -134,6 +135,12 @@ with how its download is going, which Seerr hears from Radarr and Sonarr
 every minute. Each has a page with its request's state, each episode's
 download and the cast, and Open in Library once it's there.
 
+Missing subtitles can be requested from the player, with **Request
+Subtitles…** in its subtitle menu. It opens a subtitle issue in Seerr, and
+needs Seerr's Report Issues permission. The issue's message ends with the
+language's code for Bazarr in brackets (`Requesting subtitles in Portuguese
+[pt].`), for a script on the server to fulfil it.
+
 ### Command line
 
 ```sh
@@ -178,7 +185,9 @@ in `%LOCALAPPDATA%\Microsoft\Windows\INetCache\jelly`. The setup installs
 Jelly itself in `%LOCALAPPDATA%\io.github.joaotroxo.Jelly`.
 
 When it starts, Jelly asks GitHub for its latest release, to update or to say
-there's a new one.
+there's a new one. The first time it opens after an update, it shows what's
+new, from the changelog it was built with, and keeps the version in
+`settings.json` (`last_version`) so it only does once.
 
 ## Troubleshooting
 

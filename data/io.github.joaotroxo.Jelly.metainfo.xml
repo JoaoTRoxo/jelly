@@ -66,6 +66,19 @@
   </branding>
 
   <releases>
+    <release version="0.5.0" date="2026-11-11">
+      <description>
+        <ul>
+          <li>Second subtitles, to read two languages at once</li>
+          <li>Subtitles move clear of the controls while they're shown</li>
+          <li>Request Subtitles in the subtitle menu, through Seerr</li>
+          <li>What's New, the first time Jelly opens after an update</li>
+          <li>The controls hide after 1.5 s</li>
+          <li>Far less memory while playing, given back when the player closes</li>
+          <li>The arrow keys in the audio and subtitle menus only move</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.4.1" date="2026-10-26">
       <description>
         <ul>

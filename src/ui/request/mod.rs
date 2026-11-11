@@ -1,17 +1,19 @@
 //! What isn't in the library yet, through Seerr: its matches on the search
 //! page, what's on its way (on Home and in the library it'll land in), a page
 //! for each movie or show (what it is, how its request and downloads are
-//! going), the request dialogs, and signing in to Seerr with the Jellyfin
-//! password.
+//! going), the request dialogs, asking for subtitles for what's playing, and
+//! signing in to Seerr with the Jellyfin password.
 
 mod dialogs;
 mod page;
 mod search;
+mod subtitles;
 mod underway;
 
 pub use dialogs::{sign_in, sign_in_too};
 pub use page::page;
 pub use search::Section;
+pub use subtitles::{can_request_subtitles, request_subtitles};
 pub use underway::underway;
 
 use super::Ctx;

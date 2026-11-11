@@ -6,6 +6,55 @@ All notable changes to Jelly are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-11
+
+### Added
+
+- Second subtitles, smaller and just above the first ones at the bottom of
+  the video, to read two languages at once (Japanese and English, say): pick
+  them under Second Subtitles in the subtitle menu. They follow the first
+  ones' size and place, whatever their style, and over black borders. They
+  can be any text subtitles, not pictures (PGS, DVD's), which mpv draws
+  where the first ones are. Like the others, they're picked again in the
+  show's other episodes, and kept in `settings.json`. While they're on, the
+  subtitles no longer change with the audio's language: the two were
+  picked to go together.
+- Request Subtitles… at the bottom of the player's subtitle menu: pick a
+  language, and whether it's for the whole show, the season or the episode,
+  and it goes to the server as a subtitle issue in Seerr on that show or
+  movie. The menu now opens for videos without subtitles too. Accounts need
+  Seerr's Report Issues permission for this, which Seerr doesn't give by
+  default.
+- What's New: the first time Jelly opens after an update, a window shows
+  what the new version adds and what it adjusts (these notes). Not on the
+  first start, and only once.
+
+### Changed
+
+- The player's controls no longer cover the subtitles. While they're shown,
+  as they are all the time the video is paused, the subtitles move up above
+  the seek bar and buttons, second subtitles with them (or, at the top of
+  the video, down below the title), and they go back once the controls
+  hide. ASS signs stay where they are, and subtitles drawn in the video's
+  picture (ASS, PGS) move only as far as its black borders don't already
+  keep them clear.
+- The player uses far less memory: about 450 MB while playing a 1080p
+  video, where it used 650 to 750 MB. It keeps a minute of the video ahead
+  (at most 150 MiB) and 32 MiB behind, where it kept up to 300 MiB and
+  100 MiB. A `demuxer-max-bytes` or `cache-secs` in `mpv.conf` still asks
+  for more.
+- The player's controls hide after 1.5 s without the pointer moving, where
+  they waited 3 s.
+
+### Fixed
+
+- The arrow keys in the audio and subtitle menus only move, and Enter or
+  Space picks: they picked each track they went past. After a pick, the
+  menu stays on it.
+- On Linux, Jelly no longer grows by hundreds of MB with each video played
+  (it passed 1.5 GB after five), and it gives the memory back when the
+  player closes.
+
 ## [0.4.1] - 2026-10-26
 
 ### Changed
@@ -127,7 +176,8 @@ The first release.
 - Releases for Linux (a tarball that uses the system's GTK, libadwaita and
   libmpv) and Windows (a folder that runs without installing anything).
 
-[Unreleased]: https://github.com/JoaoTRoxo/jelly/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/JoaoTRoxo/jelly/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/JoaoTRoxo/jelly/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/JoaoTRoxo/jelly/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/JoaoTRoxo/jelly/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/JoaoTRoxo/jelly/compare/v0.2.0...v0.3.0

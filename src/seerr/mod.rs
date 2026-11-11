@@ -15,6 +15,9 @@ pub const PARTLY_AVAILABLE: i32 = 4;
 pub const AVAILABLE: i32 = 5;
 pub const BLOCKLISTED: i32 = 6;
 
+/// An issue about subtitles ("IssueType")
+const SUBTITLES_ISSUE: i32 = 3;
+
 /// What a status means to someone requesting, when it means anything
 pub fn status_label(status: i32) -> Option<&'static str> {
     match status {
@@ -135,6 +138,8 @@ impl Found {
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct MediaInfo {
+    /// Seerr's own number for it: issues go by this one, not TMDB's
+    pub id: i64,
     pub tmdb_id: i64,
     pub media_type: String,
     pub status: i32,
@@ -758,6 +763,53 @@ impl Client {
         let request: Value = http::read_json(self.check(resp)?).unwrap_or_default();
         Ok(request["status"].as_i64() == Some(2))
     }
+
+    /// Ask for subtitles for a movie or show (`media_type`: movie or tv): an
+    /// issue about them, for whoever or whatever looks after Seerr's issues.
+    /// `part`: the season and episode it's about, 0 for all of them.
+    /// `language`: its name, and Bazarr's code for it.
+    pub fn request_subtitles(
+        &self,
+        media_type: &str,
+        tmdb_id: i64,
+        part: (i32, i32),
+        language: (&str, &str),
+    ) -> Result<()> {
+        let media = self
+            .details(media_type, tmdb_id)?
+            .media_info
+            .ok_or_else(|| Error::Server("Seerr doesn't have this in its library yet".into()))?;
+        let resp = self
+            .agent
+            .post(&format!("{}/api/v1/issue", self.url))
+            .header("Cookie", &self.cookie)
+            .send_json(subtitles_issue(media.id, part, language))?;
+        let forbidden = resp.status().as_u16() == 403;
+        match self.check(resp) {
+            // Seerr's own words are about "this endpoint"
+            Err(Error::Server(_)) if forbidden => Err(Error::Server(
+                "Your Seerr account needs the Report Issues permission for this".into(),
+            )),
+            result => result.map(drop),
+        }
+    }
+}
+
+/// What Seerr's sent to open an issue about subtitles on its `media_id`. A
+/// worker on the server can fulfil it, going by this message: it's read for
+/// the code in brackets, so keep its form.
+fn subtitles_issue(
+    media_id: i64,
+    (season, episode): (i32, i32),
+    (name, code): (&str, &str),
+) -> Value {
+    json!({
+        "issueType": SUBTITLES_ISSUE,
+        "mediaId": media_id,
+        "problemSeason": season,
+        "problemEpisode": episode,
+        "message": format!("Requesting subtitles in {name} [{code}]."),
+    })
 }
 
 #[cfg(test)]

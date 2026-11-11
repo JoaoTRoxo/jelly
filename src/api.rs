@@ -106,6 +106,9 @@ pub struct Item {
     /// Only in single-item replies, or with ITEM_FIELDS_STREAMS
     #[serde(deserialize_with = "null_default")]
     pub media_streams: Vec<MediaStream>,
+    /// Its ids elsewhere, by site ("Tmdb"…). Only in single-item replies
+    #[serde(deserialize_with = "null_default")]
+    pub provider_ids: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -131,6 +134,11 @@ pub struct UserData {
 }
 
 impl Item {
+    /// Its number on TMDB, when the server knows it
+    pub fn tmdb_id(&self) -> Option<i64> {
+        self.provider_ids.get("Tmdb")?.parse().ok()
+    }
+
     pub fn is_folder_like(&self) -> bool {
         matches!(
             self.kind.as_str(),
@@ -282,6 +290,8 @@ pub struct MediaStream {
     pub is_external: bool,
     pub is_forced: bool,
     pub is_default: bool,
+    /// Text, not pictures (PGS, DVD's)
+    pub is_text_subtitle_stream: bool,
     pub delivery_url: Option<String>,
     pub profile: Option<String>,
     pub width: Option<i32>,
