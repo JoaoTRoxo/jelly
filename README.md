@@ -135,6 +135,12 @@ with how its download is going, which Seerr hears from Radarr and Sonarr
 every minute. Each has a page with its request's state, each episode's
 download and the cast, and Open in Library once it's there.
 
+Missing subtitles can be requested from the player, with **Request
+Subtitles…** in its subtitle menu. It opens a subtitle issue in Seerr, and
+needs Seerr's Report Issues permission. The issue's message ends with the
+language's code for Bazarr in brackets (`Requesting subtitles in Portuguese
+[pt].`), for a script on the server to fulfil it.
+
 ### Command line
 
 ```sh

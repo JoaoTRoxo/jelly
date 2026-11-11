@@ -6,6 +6,7 @@ use super::choice::Choice;
 use super::{Player, Playing, Track};
 use crate::api;
 use crate::mpv::Mpv;
+use crate::ui::request;
 use adw::prelude::*;
 use std::iter;
 use std::rc::Rc;
@@ -96,8 +97,16 @@ impl Player {
         // With one track too: greyed out, it looked broken
         self.audio_button
             .set_sensitive(tracks.iter().any(|t| t.kind == "audio"));
+        // Without any subtitles too: that's when they're wanted
+        let can_request = self
+            .state
+            .borrow()
+            .playing
+            .as_ref()
+            .is_some_and(|p| request::can_request_subtitles(&p.item));
+        self.request_subs.set_visible(can_request);
         self.subs_button
-            .set_sensitive(tracks.iter().any(|t| t.kind == "sub"));
+            .set_sensitive(can_request || tracks.iter().any(|t| t.kind == "sub"));
         self.state.borrow_mut().tracks = tracks;
     }
 
@@ -151,6 +160,15 @@ impl Player {
             "secondary-sid",
             iter::once(off(|t| t.second)).chain(second),
         );
+    }
+
+    /// Ask for subtitles for what's playing, from the subtitle menu
+    pub(super) fn request_subtitles(&self) {
+        self.subs_button.popdown();
+        let item = self.state.borrow().playing.as_ref().map(|p| p.item.clone());
+        if let (Some(ctx), Some(item)) = (self.ctx.upgrade(), item) {
+            request::request_subtitles(&ctx, &item);
+        }
     }
 
     /// Once a seek is done, select image subtitles (Blu-ray's, DVD's) again.

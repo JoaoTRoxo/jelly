@@ -17,6 +17,12 @@ All notable changes to Jelly are recorded here. The format follows
   show's other episodes, and kept in `settings.json`. While they're on, the
   subtitles no longer change with the audio's language: the two were
   picked to go together.
+- Request Subtitles… at the bottom of the player's subtitle menu: pick a
+  language, and whether it's for the whole show, the season or the episode,
+  and it goes to the server as a subtitle issue in Seerr on that show or
+  movie. The menu now opens for videos without subtitles too. Accounts need
+  Seerr's Report Issues permission for this, which Seerr doesn't give by
+  default.
 
 ### Changed
 

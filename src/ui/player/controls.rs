@@ -35,6 +35,7 @@ pub struct Controls {
     pub audio_list: gtk::Box,
     pub subs_button: gtk::MenuButton,
     pub subs_list: gtk::Box,
+    pub request_subs: gtk::Button,
     pub fullscreen_button: gtk::Button,
     pub ends: gtk::Label,
     pub skip_button: gtk::Button,
@@ -138,10 +139,20 @@ impl Controls {
             .orientation(gtk::Orientation::Vertical)
             .spacing(2)
             .build();
+        let request_subs = gtk::Button::builder()
+            .child(
+                &gtk::Label::builder()
+                    .label("Request Subtitles…")
+                    .xalign(0.0)
+                    .build(),
+            )
+            .css_classes(["flat"])
+            .visible(false)
+            .build();
         let subs_button = menu_button(
             "media-view-subtitles-symbolic",
             "Subtitles (S)",
-            &scrolling(&subs_list),
+            &subs_menu(&subs_list, &request_subs),
         );
         focus_checked(&audio_button, &audio_list);
         focus_checked(&subs_button, &subs_list);
@@ -242,6 +253,7 @@ impl Controls {
             audio_list,
             subs_button,
             subs_list,
+            request_subs,
             fullscreen_button,
             ends,
             skip_button,
@@ -381,6 +393,24 @@ fn focus_checked(menu: &gtk::MenuButton, list: &gtk::Box) {
     });
 }
 
+/// The subtitle menu: the tracks, scrolling if there are many, and under
+/// them, always in sight, the way to ask for others
+fn subs_menu(list: &gtk::Box, request: &gtk::Button) -> gtk::Box {
+    let separator = gtk::Separator::builder()
+        .margin_top(6)
+        .margin_bottom(6)
+        .build();
+    request
+        .bind_property("visible", &separator, "visible")
+        .sync_create()
+        .build();
+    let menu = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    menu.append(&scrolling(list));
+    menu.append(&separator);
+    menu.append(request);
+    menu
+}
+
 fn menu_button(icon: &str, tooltip: &str, content: &impl IsA<gtk::Widget>) -> gtk::MenuButton {
     let popover = gtk::Popover::builder().child(content).build();
     gtk::MenuButton::builder()
@@ -416,6 +446,7 @@ impl Player {
         on(&self.fullscreen_button, |p| p.toggle_fullscreen());
         on(mute, |p| p.toggle_mute());
         on(&self.skip_button, |p| p.skip());
+        on(&self.request_subs, |p| p.request_subtitles());
         on(&self.up_next.play, |p| p.play_next());
         on(&self.up_next.dismiss, |p| p.decline_next());
 
