@@ -95,7 +95,10 @@ the app and try it; say in the pull request what you tried, and on what
 1. In a pull request, move CHANGELOG.md's Unreleased entries under a new
    `## [X.Y.Z] - YYYY-MM-DD` heading (and update the links at its end), set
    `version` in `Cargo.toml` (then `cargo build`, for `Cargo.lock`), and add
-   the release to `data/io.github.joaotroxo.Jelly.metainfo.xml`.
+   the release to `data/io.github.joaotroxo.Jelly.metainfo.xml`. Its
+   description is what Jelly's What's New shows after the update: a short
+   line for each change, saying only what was done ("Memory usage
+   improved"), in a `<ul>` under `<p>New</p>` and under `<p>Adjustments</p>`.
    `tools/release-check.sh vX.Y.Z` checks they agree.
 2. After it's merged, tag that commit on `main` with an annotated tag, and
    push it:

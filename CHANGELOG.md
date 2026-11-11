@@ -6,6 +6,12 @@ All notable changes to Jelly are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- What's New is short: a line for each change, under New and Adjustments,
+  in place of these notes in full. The lines are each release's notes in
+  the AppStream metadata, which software centres show too.
+
 ## [0.5.0] - 2026-11-11
 
 ### Added
