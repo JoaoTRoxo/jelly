@@ -47,12 +47,31 @@
   color: white;
 }
 /* The time under the pointer, over the seek bar */
-/* Second subtitles, which Jelly draws over the video: like mpv's own */
-.second-subtitles {
+/* Subtitles drawn over the video: selectable on hover to copy text */
+.video-subtitle {
   color: white;
   font-family: sans-serif;
   font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 8px;
+  outline: none;
   text-shadow: 0 0 2px black, 0 0 2px black, 0 0 3px black, 1px 1px 3px black;
+  transition: background-color 120ms ease-out;
+}
+/* First subtitles are drawn by mpv until hovered or selected */
+.first-subtitles {
+  opacity: 0;
+}
+.first-subtitles.subtitle-active {
+  opacity: 1;
+}
+.video-subtitle.subtitle-active {
+  background-color: rgb(16 12 22 / 78%);
+}
+.video-subtitle selection {
+  background-color: var(--accent-bg-color);
+  color: var(--accent-fg-color);
+  text-shadow: none;
 }
 .seek-time {
   padding: 4px 9px;

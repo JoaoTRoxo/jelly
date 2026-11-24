@@ -17,6 +17,7 @@ pub struct Controls {
     pub overlay: gtk::Overlay,
     pub top: gtk::Revealer,
     pub bottom: gtk::Revealer,
+    pub window_controls: [gtk::WindowControls; 2],
     pub title: gtk::Label,
     pub subtitle: gtk::Label,
     pub back: gtk::Button,
@@ -46,14 +47,23 @@ pub struct Controls {
 }
 
 impl Controls {
-    /// Built over `area`, the video, and `second`, its second subtitles
-    pub fn new(area: &gtk::GLArea, second: &gtk::Label) -> Controls {
+    /// Built over `area`, the video, and its selectable `first` and `second`
+    /// subtitle overlays
+    pub fn new(area: &gtk::GLArea, first: &gtk::Label, second: &gtk::Label) -> Controls {
         let overlay = gtk::Overlay::builder()
             .child(area)
             .css_classes(["player"])
             .build();
 
-        // Top: back and title
+        // Top: back, title, and window buttons in a draggable handle
+        let start_controls = gtk::WindowControls::builder()
+            .side(gtk::PackType::Start)
+            .valign(gtk::Align::Center)
+            .build();
+        let end_controls = gtk::WindowControls::builder()
+            .side(gtk::PackType::End)
+            .valign(gtk::Align::Center)
+            .build();
         let back = icon_button("go-previous-symbolic", "Back (Esc)");
         let title = gtk::Label::builder()
             .xalign(0.0)
@@ -65,20 +75,27 @@ impl Controls {
             .ellipsize(gtk::pango::EllipsizeMode::End)
             .css_classes(["dim-label"])
             .build();
-        let titles = gtk::Box::new(gtk::Orientation::Vertical, 2);
+        let titles = gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .spacing(2)
+            .hexpand(true)
+            .build();
         titles.append(&title);
         titles.append(&subtitle);
         let top_box = gtk::Box::builder()
             .spacing(12)
             .css_classes(["player-top"])
             .build();
+        top_box.append(&start_controls);
         top_box.append(&back);
         top_box.append(&titles);
+        top_box.append(&end_controls);
+        let top_handle = gtk::WindowHandle::builder().child(&top_box).build();
         let top = gtk::Revealer::builder()
             .transition_type(gtk::RevealerTransitionType::Crossfade)
             .reveal_child(true)
             .valign(gtk::Align::Start)
-            .child(&top_box)
+            .child(&top_handle)
             .build();
 
         // Bottom: seek bar and buttons
@@ -218,10 +235,11 @@ impl Controls {
             .visible(false)
             .build();
 
-        // The second subtitles as if in the video, then the next episode's
-        // screen under the controls, which still work over it
+        // The subtitles as if in the video, then the next episode's screen
+        // under the controls, which still work over it
         for child in [
-            second.upcast_ref::<gtk::Widget>(),
+            first.upcast_ref::<gtk::Widget>(),
+            second.upcast_ref(),
             up_next.root.upcast_ref(),
             top.upcast_ref(),
             bottom.upcast_ref(),
@@ -236,6 +254,7 @@ impl Controls {
             overlay,
             top,
             bottom,
+            window_controls: [start_controls, end_controls],
             title,
             subtitle,
             back,
@@ -552,12 +571,40 @@ impl Player {
             revealer.add_controller(hover);
         }
 
-        // Click to pause, double-click for fullscreen (undoing the first click's pause)
+        // Drag the video to move the window when not fullscreen; click to
+        // pause, double-click for fullscreen (undoing the first click's pause)
+        let drag_start = Rc::new(Cell::new((0.0, 0.0)));
+        let dragged = Rc::new(Cell::new(false));
+        let drag = gtk::GestureDrag::new();
+        drag.set_button(gdk::BUTTON_PRIMARY);
+        let (start, moved) = (drag_start.clone(), dragged.clone());
+        drag.connect_drag_begin(move |_, x, y| {
+            start.set((x, y));
+            moved.set(false);
+        });
+        let (weak, start, moved) = (Rc::downgrade(self), drag_start, dragged.clone());
+        drag.connect_drag_update(move |gesture, dx, dy| {
+            let Some(p) = weak.upgrade() else { return };
+            if moved.get() || !p.area.drag_check_threshold(0, 0, dx as i32, dy as i32) {
+                return;
+            }
+            moved.set(true);
+            if p.window().is_some_and(|w| !w.is_fullscreen()) {
+                let (sx, sy) = start.get();
+                begin_window_move(&p.area, gesture, sx + dx, sy + dy);
+            }
+        });
+        self.area.add_controller(drag);
+
         let click = gtk::GestureClick::new();
         click.set_button(gdk::BUTTON_PRIMARY);
         let weak = Rc::downgrade(self);
-        click.connect_pressed(move |_, n_press, _, _| {
+        click.connect_released(move |_, n_press, _, _| {
+            if dragged.replace(false) {
+                return;
+            }
             if let Some(p) = weak.upgrade() {
+                p.clear_subtitle_selection();
                 p.toggle_pause();
                 if n_press == 2 {
                     p.toggle_fullscreen();
@@ -612,7 +659,9 @@ impl Player {
             Key::Down => self.change_volume(-5.0),
             Key::f | Key::F | Key::F11 => self.toggle_fullscreen(),
             Key::Escape => {
-                if self.window().is_some_and(|w| w.is_fullscreen()) {
+                if self.subtitles.has_selection() {
+                    self.clear_subtitle_selection();
+                } else if self.window().is_some_and(|w| w.is_fullscreen()) {
                     self.toggle_fullscreen();
                 } else {
                     self.close();
@@ -751,6 +800,13 @@ impl Player {
 
     // ---- UI state ----
 
+    pub(super) fn update_window_controls(&self) {
+        let fullscreen = self.window().is_some_and(|w| w.is_fullscreen());
+        for controls in &self.window_controls {
+            controls.set_visible(!fullscreen && !controls.is_empty());
+        }
+    }
+
     pub(super) fn show_controls(&self) {
         {
             let mut st = self.state.borrow_mut();
@@ -763,17 +819,20 @@ impl Player {
         self.top.set_reveal_child(true);
         self.bottom.set_reveal_child(true);
         self.overlay.set_cursor(None);
+        self.subtitles.set_targetable(true);
         self.place_subtitles();
     }
 
     pub(super) fn tick(&self) {
         self.update_ends();
+        self.sync_subtitles();
         let hide = {
             let st = self.state.borrow();
             st.controls_shown
                 && !st.paused
                 && !st.loading
                 && !st.over_controls
+                && !self.subtitles.is_active()
                 && st.last_motion.elapsed() >= HIDE_CONTROLS_AFTER
                 && !self.error.is_visible()
                 && ![&self.volume_button, &self.audio_button, &self.subs_button]
@@ -785,6 +844,7 @@ impl Player {
             self.top.set_reveal_child(false);
             self.bottom.set_reveal_child(false);
             self.overlay.set_cursor_from_name(Some("none"));
+            self.subtitles.set_targetable(false);
             self.place_subtitles();
         }
     }
@@ -894,4 +954,30 @@ impl Player {
         };
         self.volume_button.set_icon_name(icon);
     }
+}
+
+/// Start an interactive window move from pointer coordinates `(x, y)` in `widget`
+fn begin_window_move(widget: &impl IsA<gtk::Widget>, drag: &gtk::GestureDrag, x: f64, y: f64) {
+    let Some(device) = drag.device() else { return };
+    let Some(native) = widget.native() else {
+        return;
+    };
+    let Some(surface) = native.surface() else {
+        return;
+    };
+    let Ok(toplevel) = surface.downcast::<gdk::Toplevel>() else {
+        return;
+    };
+    let Some(point) = widget.compute_point(&native, &graphene::Point::new(x as f32, y as f32))
+    else {
+        return;
+    };
+    let (tx, ty) = native.surface_transform();
+    toplevel.begin_move(
+        &device,
+        gdk::BUTTON_PRIMARY as i32,
+        f64::from(point.x()) + tx,
+        f64::from(point.y()) + ty,
+        drag.current_event_time(),
+    );
 }

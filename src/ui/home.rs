@@ -1,4 +1,4 @@
-//! Home: a carousel of new titles, Continue Watching, Next Up, the libraries,
+//! Home: a carousel of new titles, Continue Watching, the libraries,
 //! and what's new in each.
 
 use super::Ctx;
@@ -6,14 +6,15 @@ use super::cards::{self, Shape};
 use crate::{api, images};
 use adw::prelude::*;
 use gtk::glib;
+use std::cmp::Reverse;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 const FEATURED_HEIGHT: i32 = 520;
 
 struct Home {
     views: Vec<api::Item>,
-    resume: Vec<api::Item>,
-    next_up: Vec<api::Item>,
+    continue_watching: Vec<api::Item>,
     latest: Vec<(api::Item, Vec<api::Item>)>,
 }
 
@@ -130,6 +131,14 @@ fn load(ctx: &Rc<Ctx>, view: &View) {
             let views = client.views()?;
             let resume = client.resume()?;
             let next_up = client.next_up(None)?;
+            let continue_watching = if resume.is_empty() {
+                next_up
+            } else if next_up.is_empty() {
+                resume
+            } else {
+                let played = client.recently_played_episodes().unwrap_or_default();
+                merge_continue_watching(resume, next_up, &played)
+            };
             let mut latest = Vec::new();
             for view in &views {
                 if matches!(
@@ -141,8 +150,7 @@ fn load(ctx: &Rc<Ctx>, view: &View) {
             }
             Ok(Home {
                 views,
-                resume,
-                next_up,
+                continue_watching,
                 latest,
             })
         },
@@ -177,15 +185,12 @@ fn load(ctx: &Rc<Ctx>, view: &View) {
                     })
                     .collect()
             };
-            if !home.resume.is_empty() {
+            if !home.continue_watching.is_empty() {
                 content.append(&cards::shelf(
                     "Continue Watching",
-                    play_cards(&home.resume),
+                    play_cards(&home.continue_watching),
                     None,
                 ));
-            }
-            if !home.next_up.is_empty() {
-                content.append(&cards::shelf("Next Up", play_cards(&home.next_up), None));
             }
             // Requests on their way, from Seerr (hidden without any)
             content.append(&super::request::underway(&ctx, None));
@@ -426,4 +431,146 @@ fn slide(ctx: &Rc<Ctx>, item: &api::Item) -> gtk::Widget {
         .build();
     overlay.add_overlay(&clamp);
     overlay.upcast()
+}
+
+/// Merge `resume` (in progress) and `next_up` (next unwatched episodes) into
+/// one shelf ordered by when each item or show was last watched. Each show
+/// appears at most once, keeping an in-progress episode over Next Up.
+fn merge_continue_watching(
+    resume: Vec<api::Item>,
+    next_up: Vec<api::Item>,
+    played: &[api::Item],
+) -> Vec<api::Item> {
+    let mut series_played: HashMap<&str, &str> = HashMap::new();
+    for episode in played {
+        if let (Some(series), Some(date)) = (episode.series_id.as_deref(), episode.last_played()) {
+            series_played
+                .entry(series)
+                .and_modify(|latest| {
+                    if date > *latest {
+                        *latest = date;
+                    }
+                })
+                .or_insert(date);
+        }
+    }
+    let mut seen_ids = HashSet::new();
+    let mut seen_series = HashSet::new();
+    let mut entries: Vec<(Option<String>, bool, usize, api::Item)> = Vec::new();
+    for (i, item) in resume.into_iter().enumerate() {
+        if !seen_ids.insert(item.id.clone()) {
+            continue;
+        }
+        if item.kind == "Episode"
+            && let Some(series) = &item.series_id
+        {
+            seen_series.insert(series.clone());
+        }
+        let date = item.last_played().map(str::to_string);
+        entries.push((date, false, i, item));
+    }
+    for (i, item) in next_up.into_iter().enumerate() {
+        if !seen_ids.insert(item.id.clone()) {
+            continue;
+        }
+        if let Some(series) = &item.series_id
+            && !seen_series.insert(series.clone())
+        {
+            continue;
+        }
+        let date = item
+            .last_played()
+            .or_else(|| {
+                item.series_id
+                    .as_deref()
+                    .and_then(|s| series_played.get(s).copied())
+            })
+            .map(str::to_string);
+        entries.push((date, true, i, item));
+    }
+    entries.sort_by(|a, b| {
+        (a.0.is_none(), Reverse(a.0.as_deref()), a.1, a.2).cmp(&(
+            b.0.is_none(),
+            Reverse(b.0.as_deref()),
+            b.1,
+            b.2,
+        ))
+    });
+    entries.into_iter().map(|(_, _, _, item)| item).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn movie(id: &str, played: Option<&str>) -> api::Item {
+        api::Item {
+            id: id.into(),
+            kind: "Movie".into(),
+            user_data: played.map(|d| api::UserData {
+                last_played_date: Some(d.into()),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+    }
+
+    fn episode(id: &str, series: &str, played: Option<&str>) -> api::Item {
+        api::Item {
+            id: id.into(),
+            kind: "Episode".into(),
+            series_id: Some(series.into()),
+            user_data: played.map(|d| api::UserData {
+                last_played_date: Some(d.into()),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn merges_resume_and_next_up_by_when_they_were_watched() {
+        let resume = vec![
+            movie("movie-a", Some("2026-11-24T10:00:00Z")),
+            episode("show-b-e2", "show-b", Some("2026-11-24T08:00:00Z")),
+        ];
+        let next_up = vec![
+            episode("show-c-e4", "show-c", None),
+            episode("show-d-e2", "show-d", None),
+            episode("show-e-e5", "show-e", None),
+        ];
+        let played = vec![
+            episode("show-c-e3", "show-c", Some("2026-11-24T11:00:00Z")),
+            episode("show-d-e1", "show-d", Some("2026-11-24T09:00:00Z")),
+        ];
+        let ids: Vec<String> = merge_continue_watching(resume, next_up, &played)
+            .into_iter()
+            .map(|i| i.id)
+            .collect();
+        assert_eq!(
+            ids,
+            [
+                "show-c-e4",
+                "movie-a",
+                "show-d-e2",
+                "show-b-e2",
+                "show-e-e5"
+            ]
+        );
+    }
+
+    #[test]
+    fn deduplicates_shows_keeping_in_progress_over_next_up() {
+        let resume = vec![episode("show-a-e2", "show-a", Some("2026-11-24T09:00:00Z"))];
+        let next_up = vec![
+            episode("show-a-e3", "show-a", None),
+            episode("show-b-e2", "show-b", None),
+        ];
+        let played = vec![episode("show-a-e1", "show-a", Some("2026-11-24T12:00:00Z"))];
+        let ids: Vec<String> = merge_continue_watching(resume, next_up, &played)
+            .into_iter()
+            .map(|i| i.id)
+            .collect();
+        assert_eq!(ids, ["show-a-e2", "show-b-e2"]);
+    }
 }

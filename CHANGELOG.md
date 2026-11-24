@@ -6,11 +6,23 @@ All notable changes to Jelly are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Hovering over text subtitles (first or second) lets you select and copy
+  them as text with Ctrl+C or the right-click menu.
+
 ### Changed
 
+- Continue Watching and Next Up on Home are merged into a single Continue
+  Watching shelf, ordered by when each title or show was last watched.
 - What's New is short: a line for each change, under New and Adjustments,
   in place of these notes in full. The lines are each release's notes in
   the AppStream metadata, which software centres show too.
+
+### Fixed
+
+- The player window can now be moved when not fullscreen (dragging its top
+  bar or the video itself), and shows window controls in the top bar.
 
 ## [0.5.0] - 2026-11-11
 
