@@ -181,12 +181,13 @@ pub struct Player {
     area: gtk::GLArea,
     mpv: RefCell<Option<Mpv>>,
     renderer: RefCell<Option<Renderer>>,
-    second: stacking::Second,
+    subtitles: stacking::Subtitles,
     sub_layout: SubLayout,
     /// Where mpv draws the subtitles now: see place_subtitles
     sub_positions: Cell<SubPositions>,
     top: gtk::Revealer,
     bottom: gtk::Revealer,
+    window_controls: [gtk::WindowControls; 2],
     title: gtk::Label,
     subtitle: gtk::Label,
     play_button: gtk::Button,
@@ -341,11 +342,13 @@ impl Player {
         let mut mpv = start_mpv(volume)?;
         let sub_layout = SubLayout::read(&mpv);
         let area = gtk::GLArea::builder().hexpand(true).vexpand(true).build();
-        let second = stacking::Second::new();
+        let subtitles =
+            stacking::Subtitles::new(mpv.get("sub-visibility").as_deref() != Some("no"));
         let Controls {
             overlay,
             top,
             bottom,
+            window_controls,
             title,
             subtitle,
             back,
@@ -371,7 +374,7 @@ impl Player {
             spinner,
             error,
             error_back,
-        } = Controls::new(&area, &second.label);
+        } = Controls::new(&area, subtitles.first_label(), subtitles.second_label());
 
         let page = adw::NavigationPage::builder()
             .title("Player")
@@ -385,11 +388,12 @@ impl Player {
             area,
             mpv: RefCell::new(None),
             renderer: RefCell::new(None),
-            second,
+            subtitles,
             sub_positions: Cell::new(sub_layout.usual),
             sub_layout,
             top,
             bottom,
+            window_controls,
             title,
             subtitle,
             play_button,
@@ -434,8 +438,17 @@ impl Player {
 
         player.connect_video();
         player.connect_controls(&back, &mute_button, &error_back);
-        player.connect_second();
+        player.connect_subtitles();
         player.connect_input();
+        player.update_window_controls();
+        for controls in &player.window_controls {
+            let weak = Rc::downgrade(&player);
+            controls.connect_empty_notify(move |_| {
+                if let Some(p) = weak.upgrade() {
+                    p.update_window_controls();
+                }
+            });
+        }
 
         let weak = Rc::downgrade(&player);
         player.page.connect_hidden(move |_| {
@@ -460,6 +473,7 @@ impl Player {
                     "view-fullscreen-symbolic"
                 };
                 p.fullscreen_button.set_icon_name(icon);
+                p.update_window_controls();
             }
         });
         *player.fullscreen_handler.borrow_mut() = Some(handler);
@@ -597,6 +611,8 @@ impl Player {
         self.previous_button.set_visible(false);
         self.next_button.set_visible(false);
         self.seek.clear_marks();
+        self.first_text(None);
+        self.second_text(None);
         self.update_spinner();
         self.update_time();
         self.update_ends();
@@ -865,6 +881,8 @@ impl Player {
                 }
                 if paused {
                     self.show_controls();
+                } else if changed {
+                    self.clear_subtitle_selection();
                 }
             }
             ("paused-for-cache", Value::Flag(waiting)) => {
@@ -877,7 +895,7 @@ impl Player {
             }
             ("osd-dimensions" | "current-tracks/sub/codec", _) => {
                 self.place_subtitles();
-                self.stack_second();
+                self.layout_subtitles();
             }
             ("volume", Value::Double(v)) => {
                 self.state.borrow_mut().volume = v;
@@ -892,11 +910,19 @@ impl Player {
             }
             ("aid" | "sid" | "secondary-sid" | "track-list", _) => {
                 self.refresh_tracks();
-                self.stack_second();
+                self.layout_subtitles();
             }
             ("secondary-sub-text", Value::Str(text)) => self.second_text(Some(&text)),
             ("secondary-sub-text", _) => self.second_text(None),
-            ("sub-text" | "sub-pos", _) => self.stack_second(),
+            ("sub-text", Value::Str(text)) => {
+                self.first_text(Some(&text));
+                self.layout_subtitles();
+            }
+            ("sub-text", _) => {
+                self.first_text(None);
+                self.layout_subtitles();
+            }
+            ("sub-pos", _) => self.layout_subtitles(),
             _ => {}
         }
     }

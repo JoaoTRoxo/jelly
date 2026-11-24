@@ -1,9 +1,7 @@
-//! The second subtitles, drawn by Jelly just above the first ones, and
-//! smaller. mpv still decodes them, but drew them in its own text style:
-//! as large as first subtitles in it, larger than ASS ones (it sizes text
-//! by the whole area, ASS by the picture), and laid out apart from the
-//! first, each in its own frame (ASS in the video's picture, text over its
-//! black borders too).
+//! Subtitles overlaid over the video: second subtitles drawn just above the
+//! first ones and smaller, and selectable text overlays for both so hovering
+//! lets you select and copy any subtitle as text. mpv still decodes both, and
+//! draws the first subtitles itself until they're hovered or selected.
 
 use super::Player;
 use super::tracks::IMAGE_SUBS;
@@ -23,6 +21,9 @@ const LINE_EMS: f64 = 1.36;
 /// their usual line and margin, as shares of the picture's height
 const PICTURE_LINE: f64 = 0.06;
 const PICTURE_MARGIN: f64 = 0.06;
+/// Vertical padding of `.video-subtitle` in style.css, so the text's own
+/// bottom lines up with `Place::bottom`
+const SUBTITLE_PAD_Y: i32 = 3;
 
 /// What subtitles are laid out in, as heights from the top and bottom edges
 /// of the area (shares of its height): the picture's black borders, or
@@ -48,12 +49,23 @@ struct Layout {
     margin: f64,
 }
 
-/// Where the second subtitles go: the bottom of their last line, and a
-/// line's height, as shares of the area's height
+/// Where subtitles go: the bottom of their last line, and a line's height,
+/// as shares of the area's height
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Place {
     bottom: f64,
     line: f64,
+}
+
+/// Where `first` subtitles themselves sit, with mpv's sub-pos `position`
+/// raising them from where they'd be at 100
+fn at(first: Layout, position: f64) -> Place {
+    let height = first.frame.height();
+    let raise = (100.0 - position) / 100.0 * (1.0 - first.margin) * height;
+    Place {
+        bottom: 1.0 - first.frame.bottom - first.margin * height - raise,
+        line: first.line * height,
+    }
 }
 
 /// Just above `lines` lines of `first` subtitles, which mpv's sub-pos
@@ -124,25 +136,104 @@ fn ass_layout(header: &str) -> Option<(f64, f64)> {
     ))
 }
 
-/// The second subtitles over the video: their label, and where it goes
-pub(super) struct Second {
-    pub label: gtk::Label,
-    place: Cell<Option<Place>>,
+/// Whether GTK's right-click context menu (Copy / Select All) is open on `label`
+fn has_open_popover(label: &gtk::Label) -> bool {
+    let mut child = label.first_child();
+    while let Some(widget) = child {
+        if widget
+            .downcast_ref::<gtk::Popover>()
+            .is_some_and(|p| p.is_visible())
+        {
+            return true;
+        }
+        child = widget.next_sibling();
+    }
+    false
 }
 
-impl Second {
-    pub(super) fn new() -> Second {
+/// One selectable subtitle label over the video, and where it goes
+struct SubLabel {
+    label: gtk::Label,
+    place: Cell<Option<Place>>,
+    hovered: Cell<bool>,
+}
+
+impl SubLabel {
+    fn new(class: &str) -> SubLabel {
         let label = gtk::Label::builder()
-            .css_classes(["second-subtitles"])
+            .css_classes(["video-subtitle", class])
             .justify(gtk::Justification::Center)
             .wrap(true)
             .wrap_mode(pango::WrapMode::WordChar)
-            .can_target(false)
+            .selectable(true)
             .visible(false)
             .build();
-        Second {
+        SubLabel {
             label,
             place: Cell::new(None),
+            hovered: Cell::new(false),
+        }
+    }
+
+    fn has_selection(&self) -> bool {
+        self.label.is_visible() && self.label.selection_bounds().is_some()
+    }
+
+    fn is_active(&self) -> bool {
+        self.label.is_visible()
+            && (self.hovered.get()
+                || self.label.selection_bounds().is_some()
+                || has_open_popover(&self.label))
+    }
+
+    fn set_text(&self, text: Option<&str>, allow: bool) {
+        let text = text.unwrap_or_default().trim();
+        if self.label.text() != text {
+            self.label.set_text(text);
+        }
+        self.update_visible(allow);
+    }
+
+    fn update_visible(&self, allow: bool) {
+        let visible = allow && self.place.get().is_some() && !self.label.text().is_empty();
+        if !visible {
+            self.hovered.set(false);
+            self.label.select_region(0, 0);
+        }
+        self.label.set_visible(visible);
+    }
+
+    fn apply_place(&self, place: Option<Place>, overlay_height: f64, allow: bool) {
+        self.place.set(place);
+        if let Some(place) = place.filter(|_| overlay_height > 0.0) {
+            let pixels = place.line * overlay_height / LINE_EMS;
+            let size =
+                pango::AttrSize::new_size_absolute((pixels * f64::from(pango::SCALE)) as i32);
+            let attributes = pango::AttrList::new();
+            attributes.insert(size);
+            self.label.set_attributes(Some(&attributes));
+        }
+        self.update_visible(allow);
+    }
+
+    fn sync_style(&self) -> bool {
+        let active = self.is_active();
+        if active {
+            self.label.add_css_class("subtitle-active");
+        } else {
+            self.label.remove_css_class("subtitle-active");
+        }
+        active
+    }
+
+    fn clear_selection(&self) {
+        if self.label.selection_bounds().is_some() {
+            self.label.select_region(0, 0);
+        }
+        if self.label.has_focus()
+            && let Some(root) = self.label.root()
+        {
+            root.set_focus(gtk::Widget::NONE);
         }
     }
 
@@ -155,63 +246,189 @@ impl Second {
         let label_width = natural.min(width * 9 / 10).max(1);
         let (_, height, _, _) = self.label.measure(gtk::Orientation::Vertical, label_width);
         let bottom = (place.bottom * f64::from(overlay.height())).round() as i32;
+        let y = (bottom - height + SUBTITLE_PAD_Y).clamp(0, (overlay.height() - height).max(0));
         Some(gdk::Rectangle::new(
             (width - label_width) / 2,
-            bottom - height,
+            y,
             label_width,
             height,
         ))
     }
 }
 
+/// First and second subtitle overlays over the video
+pub(super) struct Subtitles {
+    first: SubLabel,
+    second: SubLabel,
+    /// Whether mpv itself shows the first subtitles (from mpv.conf at startup)
+    mpv_shows_first: bool,
+    /// Whether we hid mpv's first subtitles while the selectable label is active
+    mpv_first_hidden: Cell<bool>,
+}
+
+impl Subtitles {
+    pub(super) fn new(mpv_shows_first: bool) -> Subtitles {
+        Subtitles {
+            first: SubLabel::new("first-subtitles"),
+            second: SubLabel::new("second-subtitles"),
+            mpv_shows_first,
+            mpv_first_hidden: Cell::new(false),
+        }
+    }
+
+    pub(super) fn first_label(&self) -> &gtk::Label {
+        &self.first.label
+    }
+
+    pub(super) fn second_label(&self) -> &gtk::Label {
+        &self.second.label
+    }
+
+    pub(super) fn has_selection(&self) -> bool {
+        self.first.has_selection() || self.second.has_selection()
+    }
+
+    pub(super) fn is_active(&self) -> bool {
+        self.first.is_active() || self.second.is_active()
+    }
+
+    /// Only take pointer events while controls (and the cursor) are shown, so
+    /// a hidden parked pointer doesn't flash the subtitle pill or eat clicks
+    pub(super) fn set_targetable(&self, targetable: bool) {
+        self.first
+            .label
+            .set_can_target(targetable || self.first.is_active());
+        self.second
+            .label
+            .set_can_target(targetable || self.second.is_active());
+    }
+}
+
 impl Player {
-    pub(super) fn connect_second(self: &Rc<Self>) {
+    pub(super) fn connect_subtitles(self: &Rc<Self>) {
         let weak = Rc::downgrade(self);
         self.overlay
             .connect_get_child_position(move |overlay, child| {
                 let p = weak.upgrade()?;
-                (child == p.second.label.upcast_ref::<gtk::Widget>())
-                    .then(|| p.second.position(overlay))
-                    .flatten()
+                if child == p.subtitles.first.label.upcast_ref::<gtk::Widget>() {
+                    p.subtitles.first.position(overlay)
+                } else if child == p.subtitles.second.label.upcast_ref::<gtk::Widget>() {
+                    p.subtitles.second.position(overlay)
+                } else {
+                    None
+                }
             });
+        for is_first in [true, false] {
+            let label = if is_first {
+                &self.subtitles.first.label
+            } else {
+                &self.subtitles.second.label
+            };
+            let hover = gtk::EventControllerMotion::new();
+            let weak = Rc::downgrade(self);
+            hover.connect_enter(move |_, _, _| {
+                if let Some(p) = weak.upgrade()
+                    && p.state.borrow().controls_shown
+                {
+                    p.sub_label(is_first).hovered.set(true);
+                    p.sync_subtitles();
+                }
+            });
+            let weak = Rc::downgrade(self);
+            hover.connect_motion(move |_, _, _| {
+                if let Some(p) = weak.upgrade()
+                    && p.state.borrow().controls_shown
+                    && !p.sub_label(is_first).hovered.get()
+                {
+                    p.sub_label(is_first).hovered.set(true);
+                    p.sync_subtitles();
+                }
+            });
+            let weak = Rc::downgrade(self);
+            hover.connect_leave(move |_| {
+                if let Some(p) = weak.upgrade() {
+                    p.sub_label(is_first).hovered.set(false);
+                    p.sync_subtitles();
+                }
+            });
+            label.add_controller(hover);
+            for prop in ["selection-bound", "cursor-position"] {
+                let weak = Rc::downgrade(self);
+                label.connect_notify_local(Some(prop), move |_, _| {
+                    if let Some(p) = weak.upgrade() {
+                        p.sync_subtitles();
+                    }
+                });
+            }
+        }
+    }
+
+    fn sub_label(&self, first: bool) -> &SubLabel {
+        if first {
+            &self.subtitles.first
+        } else {
+            &self.subtitles.second
+        }
+    }
+
+    /// The first subtitles' text, as mpv decodes it (None: none)
+    pub(super) fn first_text(&self, text: Option<&str>) {
+        self.subtitles
+            .first
+            .set_text(text, self.subtitles.mpv_shows_first);
+        self.sync_subtitles();
     }
 
     /// The second subtitles' text, as mpv decodes it (None: none)
     pub(super) fn second_text(&self, text: Option<&str>) {
-        self.second
-            .label
-            .set_text(text.unwrap_or_default().trim_end());
-        self.show_second();
+        self.subtitles.second.set_text(text, true);
+        self.sync_subtitles();
     }
 
-    /// The second subtitles just above the first ones, again when those
-    /// change (their track, lines or place) or the picture's place does
-    pub(super) fn stack_second(&self) {
-        let place = self.second_place();
-        self.second.place.set(place);
-        let height = f64::from(self.overlay.height());
-        if let Some(place) = place.filter(|_| height > 0.0) {
-            let pixels = place.line * height / LINE_EMS;
-            let size =
-                pango::AttrSize::new_size_absolute((pixels * f64::from(pango::SCALE)) as i32);
-            let attributes = pango::AttrList::new();
-            attributes.insert(size);
-            self.second.label.set_attributes(Some(&attributes));
+    /// Clear any selected subtitle text and return focus to the player
+    pub(super) fn clear_subtitle_selection(&self) {
+        self.subtitles.first.clear_selection();
+        self.subtitles.second.clear_selection();
+        self.sync_subtitles();
+    }
+
+    /// Update hover/selection pill styling and hide mpv's own first subtitles
+    /// while the selectable overlay is shown over them
+    pub(super) fn sync_subtitles(&self) {
+        let first_active = self.subtitles.first.sync_style();
+        self.subtitles.second.sync_style();
+        let hide_mpv = first_active && self.subtitles.mpv_shows_first;
+        if self.subtitles.mpv_first_hidden.replace(hide_mpv) != hide_mpv {
+            self.mpv_set("sub-visibility", if hide_mpv { "no" } else { "yes" });
         }
-        self.show_second();
+    }
+
+    /// Place both subtitle overlays again when their track, lines, sub-pos
+    /// or the picture's dimensions change
+    pub(super) fn layout_subtitles(&self) {
+        let (first_place, second_place) = self.subtitle_places();
+        let height = f64::from(self.overlay.height());
+        self.subtitles
+            .first
+            .apply_place(first_place, height, self.subtitles.mpv_shows_first);
+        self.subtitles
+            .second
+            .apply_place(second_place, height, true);
+        self.sync_subtitles();
         self.overlay.queue_allocate();
     }
 
-    fn show_second(&self) {
-        let label = &self.second.label;
-        label.set_visible(self.second.place.get().is_some() && !label.text().is_empty());
-    }
-
-    /// Where the second subtitles go, while there are some
-    fn second_place(&self) -> Option<Place> {
+    /// Where the first and second subtitle overlays go
+    fn subtitle_places(&self) -> (Option<Place>, Option<Place>) {
         let mpv = self.mpv.borrow();
-        let mpv = mpv.as_ref()?;
-        mpv.get("current-tracks/sub2/id")?;
+        let Some(mpv) = mpv.as_ref() else {
+            return (None, None);
+        };
+        let has_first = mpv.get("current-tracks/sub/id").is_some();
+        let has_second = mpv.get("current-tracks/sub2/id").is_some();
+        if !has_first && !has_second {
+            return (None, None);
+        }
         let number = |name: &str, default: f64| {
             mpv.get(name)
                 .and_then(|v| v.parse::<f64>().ok())
@@ -239,16 +456,17 @@ impl Player {
             margin: number("sub-margin-y", 34.0) / 720.0,
         };
         let position = number("sub-pos", 100.0);
-        // Without first ones, about in their place
-        let Some(codec) = mpv.get("current-tracks/sub/codec") else {
-            return Some(above(text, 0, position));
+        // Without first ones, second ones go about in their place
+        let Some(codec) = mpv.get("current-tracks/sub/codec").filter(|_| has_first) else {
+            return (None, has_second.then(|| above(text, 0, position)));
         };
         let shown = || lines(mpv.get("sub-text").as_deref());
         let styled = !matches!(
             mpv.get("sub-ass-override").as_deref(),
             Some("force" | "strip")
         );
-        let (first, count) = if IMAGE_SUBS.contains(&codec.as_str()) {
+        let image = IMAGE_SUBS.contains(&codec.as_str());
+        let (first, count) = if image {
             let first = Layout {
                 frame: picture,
                 line: PICTURE_LINE,
@@ -274,7 +492,9 @@ impl Player {
         } else {
             (text, shown())
         };
-        Some(above(first, count, position))
+        let first_place = (!image).then(|| at(first, position));
+        let second_place = has_second.then(|| above(first, count, position));
+        (first_place, second_place)
     }
 }
 
@@ -374,6 +594,15 @@ mod tests {
             end < first_top && first_top - end < 0.03,
             "{end} {first_top}"
         );
+    }
+
+    #[test]
+    fn first_subtitles_sit_at_their_margin_and_rise_with_sub_pos() {
+        let base = at(TEXT, 100.0);
+        assert!(close(base.bottom, 1.0 - 34.0 / 720.0));
+        assert!(close(base.line, 38.0 / 720.0));
+        let raised = at(TEXT, 80.0);
+        assert!(close(base.bottom - raised.bottom, 0.1907));
     }
 
     #[test]
