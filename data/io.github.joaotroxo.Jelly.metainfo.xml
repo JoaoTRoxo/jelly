@@ -66,6 +66,20 @@
   </branding>
 
   <releases>
+    <release version="0.6.0" date="2026-11-24">
+      <description>
+        <p>New</p>
+        <ul>
+          <li>Select and copy subtitles on hover</li>
+        </ul>
+        <p>Adjustments</p>
+        <ul>
+          <li>Continue Watching and Next Up merged into one row</li>
+          <li>Player window can be dragged and has window controls</li>
+          <li>Shorter What's New after updates</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.5.0" date="2026-11-11">
       <description>
         <p>New</p>
