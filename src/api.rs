@@ -551,6 +551,23 @@ impl Client {
         Ok(list.items)
     }
 
+    /// Episodes recently watched to the end, for ordering Next Up with Resume
+    pub fn recently_played_episodes(&self) -> Result<Vec<Item>> {
+        let list: ItemList = self.get(
+            "/Items",
+            &[
+                ("userId", &self.user_id),
+                ("recursive", "true"),
+                ("includeItemTypes", "Episode"),
+                ("isPlayed", "true"),
+                ("sortBy", "DatePlayed"),
+                ("sortOrder", "Descending"),
+                ("limit", "50"),
+            ],
+        )?;
+        Ok(list.items)
+    }
+
     /// The movie or episode most recently watched to the end
     fn last_finished(&self) -> Result<Option<Item>> {
         let list: ItemList = self.get(
