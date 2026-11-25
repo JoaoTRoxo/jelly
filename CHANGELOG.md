@@ -6,6 +6,22 @@ All notable changes to Jelly are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-11-25
+
+### Changed
+
+- Going back from the player after starting a show or movie from Home (or
+  a right-click menu) now opens its page instead of returning straight to
+  Home.
+
+### Fixed
+
+- Dragging over selected subtitle text no longer starts a text drag whose
+  floating preview could stay stuck on screen on Windows.
+- Exiting player fullscreen (or leaving the player while fullscreen) now
+  restores a maximized window instead of shrinking it back to windowed size,
+  and leaves an already-fullscreen window as it was.
+
 ## [0.6.0] - 2026-11-24
 
 ### Added
@@ -196,7 +212,8 @@ The first release.
 - Releases for Linux (a tarball that uses the system's GTK, libadwaita and
   libmpv) and Windows (a folder that runs without installing anything).
 
-[Unreleased]: https://github.com/JoaoTRoxo/jelly/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/JoaoTRoxo/jelly/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/JoaoTRoxo/jelly/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/JoaoTRoxo/jelly/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/JoaoTRoxo/jelly/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/JoaoTRoxo/jelly/compare/v0.4.0...v0.4.1

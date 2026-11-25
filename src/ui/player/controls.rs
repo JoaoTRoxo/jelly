@@ -757,7 +757,11 @@ impl Player {
 
     pub(super) fn toggle_fullscreen(&self) {
         if let Some(window) = self.window() {
-            window.set_fullscreened(!window.is_fullscreen());
+            let entering = !window.is_fullscreen();
+            if entering {
+                self.restore_maximized.set(window.is_maximized());
+            }
+            window.set_fullscreened(entering);
         }
     }
 
@@ -799,6 +803,17 @@ impl Player {
     }
 
     // ---- UI state ----
+
+    pub(super) fn update_fullscreen_button(&self) {
+        let fullscreen = self.window().is_some_and(|w| w.is_fullscreen());
+        let (icon, tip) = if fullscreen {
+            ("view-restore-symbolic", "Exit Fullscreen (F)")
+        } else {
+            ("view-fullscreen-symbolic", "Fullscreen (F)")
+        };
+        self.fullscreen_button.set_icon_name(icon);
+        self.fullscreen_button.set_tooltip_text(Some(tip));
+    }
 
     pub(super) fn update_window_controls(&self) {
         let fullscreen = self.window().is_some_and(|w| w.is_fullscreen());

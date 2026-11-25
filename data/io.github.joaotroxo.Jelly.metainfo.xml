@@ -66,6 +66,16 @@
   </branding>
 
   <releases>
+    <release version="0.6.1" date="2026-11-25">
+      <description>
+        <p>Adjustments</p>
+        <ul>
+          <li>Back from the player opens the show's or movie's page</li>
+          <li>Exiting player fullscreen keeps the window maximized</li>
+          <li>Dragging selected subtitles no longer sticks on Windows</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.6.0" date="2026-11-24">
       <description>
         <p>New</p>
