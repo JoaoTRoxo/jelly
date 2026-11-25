@@ -168,6 +168,30 @@ impl SubLabel {
             .selectable(true)
             .visible(false)
             .build();
+        // Clearing an existing selection on a plain primary press stops
+        // GtkLabel from starting a text drag-and-drop (whose drag icon can
+        // stay stuck floating on Windows); dragging instead starts a new
+        // selection, while Shift-click, double-click and right-click keep working
+        let press = gtk::GestureClick::builder()
+            .button(gdk::BUTTON_PRIMARY)
+            .propagation_phase(gtk::PropagationPhase::Capture)
+            .build();
+        let weak = label.downgrade();
+        press.connect_pressed(move |gesture, n_press, _, _| {
+            if n_press != 1
+                || gesture
+                    .current_event_state()
+                    .contains(gdk::ModifierType::SHIFT_MASK)
+            {
+                return;
+            }
+            if let Some(label) = weak.upgrade()
+                && label.selection_bounds().is_some()
+            {
+                label.select_region(0, 0);
+            }
+        });
+        label.add_controller(press);
         SubLabel {
             label,
             place: Cell::new(None),

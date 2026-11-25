@@ -17,6 +17,11 @@ struct Loaded {
     similar: Vec<api::Item>,
 }
 
+/// Widget name used to recognise an item's page in the navigation stack
+pub fn page_key(item_id: &str) -> String {
+    format!("item:{item_id}")
+}
+
 /// `season`: for series, the season to show first
 pub fn page(ctx: &Rc<Ctx>, item: api::Item, season: Option<String>) -> adw::NavigationPage {
     let stack = gtk::Stack::new();
@@ -31,6 +36,7 @@ pub fn page(ctx: &Rc<Ctx>, item: api::Item, season: Option<String>) -> adw::Navi
         .title(item.name.as_str())
         .child(&toolbar)
         .build();
+    page.set_widget_name(&page_key(&item.id));
 
     // The season shown; kept across reloads (after playing something)
     let selected_season = Rc::new(RefCell::new(season));

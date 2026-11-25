@@ -119,6 +119,49 @@ impl Ctx {
         session::clear();
         self.nav.replace(&[login::page(self)]);
     }
+
+    /// Pages currently in the navigation stack, bottom to top
+    fn nav_pages(&self) -> Vec<adw::NavigationPage> {
+        let stack = self.nav.navigation_stack();
+        (0..stack.n_items())
+            .filter_map(|i| stack.item(i)?.downcast::<adw::NavigationPage>().ok())
+            .collect()
+    }
+
+    /// Show `player` with `item`'s (or its show's) page directly underneath it
+    /// when it isn't already there, so going back lands on that page instead
+    /// of Home
+    pub(crate) fn show_player(
+        self: &Rc<Self>,
+        player: &adw::NavigationPage,
+        item: Option<&api::Item>,
+    ) {
+        let target = item.and_then(item_page_target);
+        let mut pages = self.nav_pages();
+        let on_top = pages.last() == Some(player);
+        let below = if on_top {
+            pages.len().checked_sub(2).and_then(|i| pages.get(i))
+        } else {
+            pages.last()
+        };
+        let needs_page = target
+            .as_ref()
+            .filter(|(t, _)| !below.is_some_and(|p| p.widget_name() == item::page_key(&t.id)));
+        match (on_top, needs_page) {
+            (true, None) => {}
+            (false, None) => self.nav.push(player),
+            (true, Some((t, season))) => {
+                let pos = pages.len() - 1;
+                pages.insert(pos, item::page(self, t.clone(), season.clone()));
+                self.nav.replace(&pages);
+            }
+            (false, Some((t, season))) => {
+                pages.push(item::page(self, t.clone(), season.clone()));
+                pages.push(player.clone());
+                self.nav.replace(&pages);
+            }
+        }
+    }
 }
 
 /// Run `work` with the API client on a worker thread, then `done` with its
@@ -156,36 +199,38 @@ pub fn run<T: Send + 'static>(
     });
 }
 
+/// The movie or series whose detail page represents `item`, and which season
+/// to show first
+pub(crate) fn item_page_target(item: &api::Item) -> Option<(api::Item, Option<String>)> {
+    let series = |season| {
+        item.series_id.as_ref().map(|id| {
+            (
+                api::Item {
+                    id: id.clone(),
+                    kind: "Series".into(),
+                    name: item.series_name.clone().unwrap_or_default(),
+                    ..Default::default()
+                },
+                season,
+            )
+        })
+    };
+    match item.kind.as_str() {
+        "Series" | "Movie" | "Video" => Some((item.clone(), None)),
+        "Season" => series(Some(item.id.clone())),
+        "Episode" => series(item.season_id.clone()),
+        _ => None,
+    }
+}
+
 /// Open an item's page (or play it, for things that have no page)
 pub fn open(ctx: &Rc<Ctx>, item: &api::Item) {
-    match item.kind.as_str() {
-        "Series" | "Movie" | "Video" => ctx.nav.push(&item::page(ctx, item.clone(), None)),
-        "Season" => {
-            if let Some(series) = &item.series_id {
-                let series = api::Item {
-                    id: series.clone(),
-                    kind: "Series".into(),
-                    name: item.series_name.clone().unwrap_or_default(),
-                    ..Default::default()
-                };
-                ctx.nav
-                    .push(&item::page(ctx, series, Some(item.id.clone())));
-            }
-        }
-        "Episode" => {
-            if let Some(series) = &item.series_id {
-                let series = api::Item {
-                    id: series.clone(),
-                    kind: "Series".into(),
-                    name: item.series_name.clone().unwrap_or_default(),
-                    ..Default::default()
-                };
-                ctx.nav
-                    .push(&item::page(ctx, series, item.season_id.clone()));
-            }
-        }
-        _ if item.is_folder_like() => ctx.nav.push(&library::page(ctx, item.clone())),
-        _ => play(ctx, item, false),
+    if let Some((target, season)) = item_page_target(item) {
+        ctx.nav.push(&item::page(ctx, target, season));
+    } else if item.is_folder_like() {
+        ctx.nav.push(&library::page(ctx, item.clone()));
+    } else if !matches!(item.kind.as_str(), "Season" | "Episode") {
+        play(ctx, item, false);
     }
 }
 
@@ -245,6 +290,33 @@ pub fn reloading_page(ctx: &Rc<Ctx>, page: &adw::NavigationPage, load: impl Fn()
     });
 }
 
+/// Re-maximize `window` once it finishes leaving fullscreen (GTK4 on Windows
+/// drops the maximized state when a maximized window goes fullscreen)
+pub(crate) fn restore_maximized_on_unfullscreen(window: &gtk::Window) {
+    let slot: Rc<Cell<Option<glib::SignalHandlerId>>> = Rc::new(Cell::new(None));
+    let handler = slot.clone();
+    slot.set(Some(window.connect_fullscreened_notify(move |window| {
+        if window.is_fullscreen() {
+            return;
+        }
+        if let Some(id) = handler.take() {
+            window.disconnect(id);
+        }
+        schedule_maximize(window);
+    })));
+}
+
+pub(crate) fn schedule_maximize(window: &gtk::Window) {
+    let weak = window.downgrade();
+    glib::idle_add_local_once(move || {
+        if let Some(window) = weak.upgrade()
+            && !window.is_fullscreen()
+        {
+            window.maximize();
+        }
+    });
+}
+
 /// A header bar over a hero picture at the top of `scroller`: clear at the
 /// top, solid once anything scrolls under it
 pub fn header_over_hero(header: &adw::HeaderBar, scroller: &gtk::ScrolledWindow) {
@@ -291,4 +363,55 @@ pub fn error_page(message: &str, retry: impl Fn() + 'static) -> gtk::Widget {
         .vexpand(true)
         .build()
         .upcast()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn item_page_target_maps_episodes_and_seasons_to_their_series() {
+        let episode = api::Item {
+            id: "ep1".into(),
+            kind: "Episode".into(),
+            name: "Pilot".into(),
+            series_id: Some("show1".into()),
+            series_name: Some("Show".into()),
+            season_id: Some("s1".into()),
+            ..Default::default()
+        };
+        let (target, season) = item_page_target(&episode).unwrap();
+        assert_eq!(target.id, "show1");
+        assert_eq!(target.kind, "Series");
+        assert_eq!(target.name, "Show");
+        assert_eq!(season.as_deref(), Some("s1"));
+
+        let season_item = api::Item {
+            id: "s2".into(),
+            kind: "Season".into(),
+            series_id: Some("show1".into()),
+            series_name: Some("Show".into()),
+            ..Default::default()
+        };
+        let (target, season) = item_page_target(&season_item).unwrap();
+        assert_eq!(target.id, "show1");
+        assert_eq!(season.as_deref(), Some("s2"));
+
+        let movie = api::Item {
+            id: "m1".into(),
+            kind: "Movie".into(),
+            name: "Film".into(),
+            ..Default::default()
+        };
+        let (target, season) = item_page_target(&movie).unwrap();
+        assert_eq!(target.id, "m1");
+        assert_eq!(season, None);
+
+        let folder = api::Item {
+            id: "f1".into(),
+            kind: "Folder".into(),
+            ..Default::default()
+        };
+        assert!(item_page_target(&folder).is_none());
+    }
 }

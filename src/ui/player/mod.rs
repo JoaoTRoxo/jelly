@@ -52,14 +52,19 @@ pub enum Media {
 }
 
 pub fn open(ctx: &Rc<Ctx>, media: Media) {
+    let item = match &media {
+        Media::Jellyfin { item, .. } => Some(item.as_ref()),
+        Media::File(_) => None,
+    };
     if let Some(player) = CURRENT.with(|c| c.borrow().clone()) {
+        ctx.show_player(&player.page, item);
         player.load(media);
         return;
     }
     match Player::new(ctx) {
         Ok(player) => {
             CURRENT.with(|c| *c.borrow_mut() = Some(player.clone()));
-            ctx.nav.push(&player.page);
+            ctx.show_player(&player.page, item);
             player.load(media);
         }
         Err(e) => ctx.toast(&format!("Couldn't start the video player: {e}")),
@@ -212,6 +217,10 @@ pub struct Player {
     spinner: adw::Spinner,
     error: adw::StatusPage,
     fullscreen_handler: RefCell<Option<glib::SignalHandlerId>>,
+    /// Window was already fullscreen before the player opened
+    fullscreen_on_open: bool,
+    /// Re-maximize when leaving fullscreen (GTK4 on Windows drops maximized)
+    restore_maximized: Cell<bool>,
     /// The keys' controller, on the window
     keys: RefCell<Option<gtk::EventControllerKey>>,
     /// Set while we change widgets, so their signals don't act on mpv
@@ -417,6 +426,8 @@ impl Player {
             spinner,
             error,
             fullscreen_handler: RefCell::new(None),
+            fullscreen_on_open: ctx.window.is_fullscreen(),
+            restore_maximized: Cell::new(false),
             keys: RefCell::new(None),
             updating: Cell::new(false),
             state: RefCell::new(State::new(volume)),
@@ -440,6 +451,7 @@ impl Player {
         player.connect_controls(&back, &mute_button, &error_back);
         player.connect_subtitles();
         player.connect_input();
+        player.update_fullscreen_button();
         player.update_window_controls();
         for controls in &player.window_controls {
             let weak = Rc::downgrade(&player);
@@ -467,13 +479,11 @@ impl Player {
         let weak = Rc::downgrade(&player);
         let handler = ctx.window.connect_fullscreened_notify(move |window| {
             if let Some(p) = weak.upgrade() {
-                let icon = if window.is_fullscreen() {
-                    "view-restore-symbolic"
-                } else {
-                    "view-fullscreen-symbolic"
-                };
-                p.fullscreen_button.set_icon_name(icon);
+                p.update_fullscreen_button();
                 p.update_window_controls();
+                if !window.is_fullscreen() && p.restore_maximized.replace(false) {
+                    super::schedule_maximize(window.upcast_ref());
+                }
             }
         });
         *player.fullscreen_handler.borrow_mut() = Some(handler);
@@ -951,8 +961,12 @@ impl Player {
             if let Some(keys) = self.keys.borrow_mut().take() {
                 ctx.window.remove_controller(&keys);
             }
-            if ctx.window.is_fullscreen() {
-                ctx.window.unfullscreen();
+            if !blocking && !self.fullscreen_on_open && ctx.window.is_fullscreen() {
+                let window: gtk::Window = ctx.window.clone().upcast();
+                if self.restore_maximized.replace(false) {
+                    super::restore_maximized_on_unfullscreen(&window);
+                }
+                window.unfullscreen();
             }
             ctx.window.set_title(Some(api::CLIENT_NAME));
         }
