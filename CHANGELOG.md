@@ -6,6 +6,8 @@ All notable changes to Jelly are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-11-25
+
 ### Changed
 
 - Going back from the player after starting a show or movie from Home (or
@@ -210,7 +212,8 @@ The first release.
 - Releases for Linux (a tarball that uses the system's GTK, libadwaita and
   libmpv) and Windows (a folder that runs without installing anything).
 
-[Unreleased]: https://github.com/JoaoTRoxo/jelly/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/JoaoTRoxo/jelly/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/JoaoTRoxo/jelly/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/JoaoTRoxo/jelly/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/JoaoTRoxo/jelly/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/JoaoTRoxo/jelly/compare/v0.4.0...v0.4.1
