@@ -758,10 +758,14 @@ impl Player {
     pub(super) fn toggle_fullscreen(&self) {
         if let Some(window) = self.window() {
             let entering = !window.is_fullscreen();
-            if entering {
-                self.restore_maximized.set(window.is_maximized());
-            }
-            window.set_fullscreened(entering);
+            let maximized = if entering {
+                let m = crate::ui::is_window_maximized(&window);
+                self.restore_maximized.set(m);
+                m
+            } else {
+                self.restore_maximized.replace(false)
+            };
+            crate::ui::set_window_fullscreen(&window, entering, maximized);
         }
     }
 

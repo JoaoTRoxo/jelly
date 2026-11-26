@@ -963,10 +963,8 @@ impl Player {
             }
             if !blocking && !self.fullscreen_on_open && ctx.window.is_fullscreen() {
                 let window: gtk::Window = ctx.window.clone().upcast();
-                if self.restore_maximized.replace(false) {
-                    super::restore_maximized_on_unfullscreen(&window);
-                }
-                window.unfullscreen();
+                let restore = self.restore_maximized.replace(false);
+                super::set_window_fullscreen(&window, false, restore);
             }
             ctx.window.set_title(Some(api::CLIENT_NAME));
         }

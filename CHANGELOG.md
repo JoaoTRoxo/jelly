@@ -6,6 +6,11 @@ All notable changes to Jelly are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- On Windows, exiting player fullscreen from a maximized window now stays
+  maximized reliably without flashing the unmaximized window size.
+
 ## [0.6.1] - 2026-11-25
 
 ### Changed
