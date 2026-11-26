@@ -6,6 +6,12 @@ All notable changes to Jelly are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Reduced flicker when entering and leaving fullscreen on Windows by
+  syncing with DWM, preserving window pixels across the resize, and
+  skipping GTK4's intermediate unmaximized resize when maximized.
+
 ## [0.6.3] - 2026-11-26
 
 ### Fixed
