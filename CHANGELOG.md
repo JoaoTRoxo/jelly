@@ -6,6 +6,14 @@ All notable changes to Jelly are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.6.3] - 2026-11-26
+
+### Fixed
+
+- Pressing Space (or other player keys) while watching a show started from
+  Home no longer activates hidden buttons on the Home page (such as Search
+  or the menu) after the player controls hide.
+
 ## [0.6.2] - 2026-11-26
 
 ### Fixed
@@ -219,7 +227,8 @@ The first release.
 - Releases for Linux (a tarball that uses the system's GTK, libadwaita and
   libmpv) and Windows (a folder that runs without installing anything).
 
-[Unreleased]: https://github.com/JoaoTRoxo/jelly/compare/v0.6.2...HEAD
+[Unreleased]: https://github.com/JoaoTRoxo/jelly/compare/v0.6.3...HEAD
+[0.6.3]: https://github.com/JoaoTRoxo/jelly/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/JoaoTRoxo/jelly/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/JoaoTRoxo/jelly/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/JoaoTRoxo/jelly/compare/v0.5.0...v0.6.0

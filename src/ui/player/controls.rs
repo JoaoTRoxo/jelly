@@ -635,7 +635,9 @@ impl Player {
         // The player's keys while it's on screen, with the focus in it or
         // nowhere (not in a dialog over it, say)
         let focus = self.page.root().and_then(|root| root.focus());
-        if !self.page.is_mapped() || focus.is_some_and(|f| !f.is_ancestor(&self.page)) {
+        if !self.page.is_mapped()
+            || focus.is_some_and(|f| f != self.page && !f.is_ancestor(&self.page))
+        {
             return glib::Propagation::Proceed;
         }
         if modifiers.intersects(gdk::ModifierType::CONTROL_MASK | gdk::ModifierType::ALT_MASK) {
