@@ -156,9 +156,29 @@ impl Ctx {
                 self.nav.replace(&pages);
             }
             (false, Some((t, season))) => {
-                pages.push(item::page(self, t.clone(), season.clone()));
-                pages.push(player.clone());
-                self.nav.replace(&pages);
+                // Push `player` first so NavigationView unmaps the previous
+                // page cleanly (calling `replace` directly from Home leaves
+                // Home mapped and focusable underneath), then slip the item's
+                // page in below once `player` is shown.
+                let slot: Rc<Cell<Option<glib::SignalHandlerId>>> = Rc::new(Cell::new(None));
+                let handler = slot.clone();
+                let (ctx, target, season) = (Rc::downgrade(self), t.clone(), season.clone());
+                slot.set(Some(player.connect_shown(move |player| {
+                    if let Some(id) = handler.take() {
+                        player.disconnect(id);
+                    }
+                    let Some(ctx) = ctx.upgrade() else { return };
+                    let mut pages = ctx.nav_pages();
+                    let below = pages.len().checked_sub(2).and_then(|i| pages.get(i));
+                    if pages.last() == Some(player)
+                        && !below.is_some_and(|p| p.widget_name() == item::page_key(&target.id))
+                    {
+                        let pos = pages.len() - 1;
+                        pages.insert(pos, item::page(&ctx, target.clone(), season.clone()));
+                        ctx.nav.replace(&pages);
+                    }
+                })));
+                self.nav.push(player);
             }
         }
     }

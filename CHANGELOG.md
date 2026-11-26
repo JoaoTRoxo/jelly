@@ -6,6 +6,12 @@ All notable changes to Jelly are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Pressing Space (or other player keys) while watching a show started from
+  Home no longer activates hidden buttons on the Home page (such as Search
+  or the menu) after the player controls hide.
+
 ## [0.6.2] - 2026-11-26
 
 ### Fixed
