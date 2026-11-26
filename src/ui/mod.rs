@@ -322,8 +322,10 @@ pub(crate) fn is_window_maximized(window: &gtk::Window) -> bool {
 /// Enter or leave fullscreen on `window`. When `restore_maximized` is true,
 /// keep a maximized window maximized across the transition: GTK4's Win32
 /// backend unmaximizes when entering fullscreen and restores the small rect
-/// when leaving it, so on Windows we disable DWM transition animations and
-/// re-maximize synchronously right after `set_fullscreened(false)`.
+/// when leaving it, so on Windows we sync to DWM (`DwmFlush`), disable DWM
+/// transition animations, suppress GTK4's intermediate small-rect resize and
+/// `SWP_NOCOPYBITS`, and re-maximize synchronously right after
+/// `set_fullscreened(false)`.
 pub(crate) fn set_window_fullscreen(
     window: &gtk::Window,
     fullscreen: bool,
@@ -331,17 +333,36 @@ pub(crate) fn set_window_fullscreen(
 ) {
     #[cfg(windows)]
     {
+        let hwnd = window_hwnd(window);
+        if let Some(hwnd) = hwnd {
+            win32::dwm_flush();
+        }
         if !restore_maximized {
+            let _guard = hwnd.map(|h| win32::WindowPosGuard::new(h, win32::GuardMode::KeepPixels));
             window.set_fullscreened(fullscreen);
             return;
         }
         let token = next_fullscreen_token();
-        if let Some(hwnd) = window_hwnd(window) {
+        if let Some(hwnd) = hwnd {
+            if fullscreen {
+                win32::save_normal_rect(hwnd);
+            }
             win32::set_transitions_disabled(hwnd, true);
         }
-        window.set_fullscreened(fullscreen);
-        if !fullscreen {
-            window.maximize();
+        {
+            let mode = if fullscreen {
+                win32::GuardMode::EnterFromMaximized
+            } else {
+                win32::GuardMode::ExitToMaximized
+            };
+            let _guard = hwnd.map(|h| win32::WindowPosGuard::new(h, mode));
+            window.set_fullscreened(fullscreen);
+            if !fullscreen {
+                window.maximize();
+            }
+        }
+        if !fullscreen && let Some(hwnd) = hwnd {
+            win32::restore_normal_rect(hwnd);
         }
         // Re-enable DWM transitions once DWM has presented the new state, and
         // re-apply maximize if a layout pass raced with it
@@ -433,17 +454,81 @@ fn window_hwnd(window: &gtk::Window) -> Option<*mut std::ffi::c_void> {
 
 #[cfg(windows)]
 mod win32 {
+    use std::cell::Cell;
     use std::ffi::c_void;
 
     const DWMWA_TRANSITIONS_FORCEDISABLED: u32 = 3;
+    const GWL_STYLE: i32 = -16;
+    const GWLP_WNDPROC: i32 = -4;
+    const WS_POPUP: u32 = 0x8000_0000;
+    const WM_WINDOWPOSCHANGING: u32 = 0x0046;
+    const SWP_NOSIZE: u32 = 0x0001;
+    const SWP_NOMOVE: u32 = 0x0002;
+    const SWP_NOCOPYBITS: u32 = 0x0100;
+    const SWP_STATECHANGED: u32 = 0x8000;
+    const SW_SHOWMAXIMIZED: u32 = 3;
+
+    #[repr(C)]
+    #[allow(dead_code)]
+    struct WindowPos {
+        hwnd: *mut c_void,
+        hwnd_insert_after: *mut c_void,
+        x: i32,
+        y: i32,
+        cx: i32,
+        cy: i32,
+        flags: u32,
+    }
+
+    #[repr(C)]
+    #[derive(Clone, Copy, Default)]
+    #[allow(dead_code)]
+    struct Point {
+        x: i32,
+        y: i32,
+    }
+
+    #[repr(C)]
+    #[derive(Clone, Copy, Default)]
+    #[allow(dead_code)]
+    struct Rect {
+        left: i32,
+        top: i32,
+        right: i32,
+        bottom: i32,
+    }
+
+    #[repr(C)]
+    #[derive(Clone, Copy, Default)]
+    #[allow(dead_code)]
+    struct WindowPlacement {
+        length: u32,
+        flags: u32,
+        show_cmd: u32,
+        pt_min_position: Point,
+        pt_max_position: Point,
+        rc_normal_position: Rect,
+    }
 
     #[link(name = "user32")]
     unsafe extern "system" {
         fn IsZoomed(hwnd: *mut c_void) -> i32;
+        fn GetWindowLongW(hwnd: *mut c_void, index: i32) -> i32;
+        fn SetWindowLongPtrW(hwnd: *mut c_void, index: i32, new_long: isize) -> isize;
+        fn CallWindowProcW(
+            prev: isize,
+            hwnd: *mut c_void,
+            msg: u32,
+            wparam: usize,
+            lparam: isize,
+        ) -> isize;
+        fn GetWindowPlacement(hwnd: *mut c_void, placement: *mut WindowPlacement) -> i32;
+        fn SetWindowPlacement(hwnd: *mut c_void, placement: *const WindowPlacement) -> i32;
     }
 
     #[link(name = "dwmapi")]
     unsafe extern "system" {
+        fn DwmFlush() -> i32;
         fn DwmSetWindowAttribute(
             hwnd: *mut c_void,
             attribute: u32,
@@ -452,8 +537,26 @@ mod win32 {
         ) -> i32;
     }
 
+    #[derive(Clone, Copy)]
+    pub enum GuardMode {
+        KeepPixels,
+        EnterFromMaximized,
+        ExitToMaximized,
+    }
+
+    thread_local! {
+        static GUARD: Cell<Option<(*mut c_void, isize, GuardMode)>> = const { Cell::new(None) };
+        static SAVED_NORMAL_RECT: Cell<Option<Rect>> = const { Cell::new(None) };
+    }
+
     pub fn is_zoomed(hwnd: *mut c_void) -> bool {
         unsafe { IsZoomed(hwnd) != 0 }
+    }
+
+    pub fn dwm_flush() {
+        unsafe {
+            DwmFlush();
+        }
     }
 
     pub fn set_transitions_disabled(hwnd: *mut c_void, disabled: bool) {
@@ -466,6 +569,100 @@ mod win32 {
                 std::mem::size_of::<i32>() as u32,
             );
         }
+    }
+
+    /// Save the window's restored bounds before fullscreen so unmaximizing
+    /// later still returns to the original normal size
+    pub fn save_normal_rect(hwnd: *mut c_void) {
+        let mut wp = WindowPlacement {
+            length: std::mem::size_of::<WindowPlacement>() as u32,
+            ..Default::default()
+        };
+        if unsafe { GetWindowPlacement(hwnd, &mut wp) } != 0 {
+            SAVED_NORMAL_RECT.with(|r| r.set(Some(wp.rc_normal_position)));
+        }
+    }
+
+    pub fn restore_normal_rect(hwnd: *mut c_void) {
+        let Some(rect) = SAVED_NORMAL_RECT.with(Cell::take) else {
+            return;
+        };
+        if !is_zoomed(hwnd) {
+            return;
+        }
+        let mut wp = WindowPlacement {
+            length: std::mem::size_of::<WindowPlacement>() as u32,
+            ..Default::default()
+        };
+        if unsafe { GetWindowPlacement(hwnd, &mut wp) } != 0 {
+            wp.rc_normal_position = rect;
+            wp.show_cmd = SW_SHOWMAXIMIZED;
+            unsafe {
+                SetWindowPlacement(hwnd, &wp);
+            }
+        }
+    }
+
+    /// Temporarily intercepts `WM_WINDOWPOSCHANGING` during GTK4's fullscreen
+    /// toggle to clear `SWP_NOCOPYBITS` and suppress intermediate small-rect
+    /// resizes when transitioning between maximized and fullscreen
+    pub struct WindowPosGuard {
+        hwnd: *mut c_void,
+        prev: isize,
+    }
+
+    impl WindowPosGuard {
+        pub fn new(hwnd: *mut c_void, mode: GuardMode) -> Self {
+            let prev = unsafe {
+                SetWindowLongPtrW(hwnd, GWLP_WNDPROC, fullscreen_wndproc as *const () as isize)
+            };
+            if prev != 0 {
+                GUARD.with(|g| g.set(Some((hwnd, prev, mode))));
+            }
+            Self { hwnd, prev }
+        }
+    }
+
+    impl Drop for WindowPosGuard {
+        fn drop(&mut self) {
+            if self.prev != 0 {
+                unsafe {
+                    SetWindowLongPtrW(self.hwnd, GWLP_WNDPROC, self.prev);
+                }
+            }
+            GUARD.with(|g| g.set(None));
+        }
+    }
+
+    unsafe extern "system" fn fullscreen_wndproc(
+        hwnd: *mut c_void,
+        msg: u32,
+        wparam: usize,
+        lparam: isize,
+    ) -> isize {
+        let Some((target, prev, mode)) = GUARD.with(Cell::get) else {
+            return 0;
+        };
+        let result = unsafe { CallWindowProcW(prev, hwnd, msg, wparam, lparam) };
+        if hwnd == target && msg == WM_WINDOWPOSCHANGING && lparam != 0 {
+            let wp = unsafe { &mut *(lparam as *mut WindowPos) };
+            wp.flags &= !SWP_NOCOPYBITS;
+            match mode {
+                GuardMode::KeepPixels => {}
+                GuardMode::EnterFromMaximized => {
+                    let style = unsafe { GetWindowLongW(hwnd, GWL_STYLE) } as u32;
+                    if (style & WS_POPUP) == 0 {
+                        wp.flags |= SWP_NOMOVE | SWP_NOSIZE;
+                    }
+                }
+                GuardMode::ExitToMaximized => {
+                    if !is_zoomed(hwnd) && (wp.flags & SWP_STATECHANGED) == 0 {
+                        wp.flags |= SWP_NOMOVE | SWP_NOSIZE;
+                    }
+                }
+            }
+        }
+        result
     }
 }
 

@@ -66,6 +66,14 @@
   </branding>
 
   <releases>
+    <release version="0.6.4" date="2026-11-26">
+      <description>
+        <p>Adjustments</p>
+        <ul>
+          <li>Smoother fullscreen transitions on Windows</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.6.3" date="2026-11-26">
       <description>
         <p>Adjustments</p>
