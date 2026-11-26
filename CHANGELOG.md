@@ -6,6 +6,8 @@ All notable changes to Jelly are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.6.4] - 2026-11-26
+
 ### Fixed
 
 - Reduced flicker when entering and leaving fullscreen on Windows by
@@ -233,7 +235,8 @@ The first release.
 - Releases for Linux (a tarball that uses the system's GTK, libadwaita and
   libmpv) and Windows (a folder that runs without installing anything).
 
-[Unreleased]: https://github.com/JoaoTRoxo/jelly/compare/v0.6.3...HEAD
+[Unreleased]: https://github.com/JoaoTRoxo/jelly/compare/v0.6.4...HEAD
+[0.6.4]: https://github.com/JoaoTRoxo/jelly/compare/v0.6.3...v0.6.4
 [0.6.3]: https://github.com/JoaoTRoxo/jelly/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/JoaoTRoxo/jelly/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/JoaoTRoxo/jelly/compare/v0.6.0...v0.6.1
