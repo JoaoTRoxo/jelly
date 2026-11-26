@@ -290,9 +290,67 @@ pub fn reloading_page(ctx: &Rc<Ctx>, page: &adw::NavigationPage, load: impl Fn()
     });
 }
 
-/// Re-maximize `window` once it finishes leaving fullscreen (GTK4 on Windows
-/// drops the maximized state when a maximized window goes fullscreen)
-pub(crate) fn restore_maximized_on_unfullscreen(window: &gtk::Window) {
+/// Whether `window` is maximized (using Win32's `IsZoomed` on Windows)
+pub(crate) fn is_window_maximized(window: &gtk::Window) -> bool {
+    #[cfg(windows)]
+    if let Some(hwnd) = window_hwnd(window) {
+        return win32::is_zoomed(hwnd);
+    }
+    window.is_maximized()
+}
+
+/// Enter or leave fullscreen on `window`. When `restore_maximized` is true,
+/// keep a maximized window maximized across the transition: GTK4's Win32
+/// backend unmaximizes when entering fullscreen and restores the small rect
+/// when leaving it, so on Windows we disable DWM transition animations and
+/// re-maximize synchronously right after `set_fullscreened(false)`.
+pub(crate) fn set_window_fullscreen(
+    window: &gtk::Window,
+    fullscreen: bool,
+    restore_maximized: bool,
+) {
+    #[cfg(windows)]
+    {
+        if !restore_maximized {
+            window.set_fullscreened(fullscreen);
+            return;
+        }
+        let token = next_fullscreen_token();
+        if let Some(hwnd) = window_hwnd(window) {
+            win32::set_transitions_disabled(hwnd, true);
+        }
+        window.set_fullscreened(fullscreen);
+        if !fullscreen {
+            window.maximize();
+        }
+        // Re-enable DWM transitions once DWM has presented the new state, and
+        // re-apply maximize if a layout pass raced with it
+        let weak = window.downgrade();
+        glib::timeout_add_local_once(std::time::Duration::from_millis(60), move || {
+            if current_fullscreen_token() != token {
+                return;
+            }
+            if let Some(window) = weak.upgrade() {
+                if !fullscreen && !window.is_fullscreen() && !is_window_maximized(&window) {
+                    window.maximize();
+                }
+                if let Some(hwnd) = window_hwnd(&window) {
+                    win32::set_transitions_disabled(hwnd, false);
+                }
+            }
+        });
+    }
+    #[cfg(not(windows))]
+    {
+        if !fullscreen && restore_maximized {
+            restore_maximized_on_unfullscreen(window);
+        }
+        window.set_fullscreened(fullscreen);
+    }
+}
+
+#[cfg(not(windows))]
+fn restore_maximized_on_unfullscreen(window: &gtk::Window) {
     let slot: Rc<Cell<Option<glib::SignalHandlerId>>> = Rc::new(Cell::new(None));
     let handler = slot.clone();
     slot.set(Some(window.connect_fullscreened_notify(move |window| {
@@ -311,10 +369,84 @@ pub(crate) fn schedule_maximize(window: &gtk::Window) {
     glib::idle_add_local_once(move || {
         if let Some(window) = weak.upgrade()
             && !window.is_fullscreen()
+            && !is_window_maximized(&window)
         {
             window.maximize();
         }
     });
+}
+
+#[cfg(windows)]
+thread_local! {
+    static FULLSCREEN_TOKEN: Cell<u64> = const { Cell::new(0) };
+}
+
+#[cfg(windows)]
+fn next_fullscreen_token() -> u64 {
+    FULLSCREEN_TOKEN.with(|t| {
+        let next = t.get().wrapping_add(1);
+        t.set(next);
+        next
+    })
+}
+
+#[cfg(windows)]
+fn current_fullscreen_token() -> u64 {
+    FULLSCREEN_TOKEN.with(Cell::get)
+}
+
+#[cfg(windows)]
+fn window_hwnd(window: &gtk::Window) -> Option<*mut std::ffi::c_void> {
+    use gtk::glib::translate::ToGlibPtr;
+    use std::ffi::c_void;
+    unsafe extern "C" {
+        fn gdk_win32_surface_get_handle(surface: *mut gtk::gdk::ffi::GdkSurface) -> *mut c_void;
+    }
+    let surface = window.surface()?;
+    if !surface.type_().name().starts_with("GdkWin32") {
+        return None;
+    }
+    let raw: *mut gtk::gdk::ffi::GdkSurface = surface.to_glib_none().0;
+    let hwnd = unsafe { gdk_win32_surface_get_handle(raw) };
+    (!hwnd.is_null()).then_some(hwnd)
+}
+
+#[cfg(windows)]
+mod win32 {
+    use std::ffi::c_void;
+
+    const DWMWA_TRANSITIONS_FORCEDISABLED: u32 = 3;
+
+    #[link(name = "user32")]
+    unsafe extern "system" {
+        fn IsZoomed(hwnd: *mut c_void) -> i32;
+    }
+
+    #[link(name = "dwmapi")]
+    unsafe extern "system" {
+        fn DwmSetWindowAttribute(
+            hwnd: *mut c_void,
+            attribute: u32,
+            value: *const c_void,
+            size: u32,
+        ) -> i32;
+    }
+
+    pub fn is_zoomed(hwnd: *mut c_void) -> bool {
+        unsafe { IsZoomed(hwnd) != 0 }
+    }
+
+    pub fn set_transitions_disabled(hwnd: *mut c_void, disabled: bool) {
+        let value = i32::from(disabled);
+        unsafe {
+            DwmSetWindowAttribute(
+                hwnd,
+                DWMWA_TRANSITIONS_FORCEDISABLED,
+                std::ptr::from_ref(&value).cast(),
+                std::mem::size_of::<i32>() as u32,
+            );
+        }
+    }
 }
 
 /// A header bar over a hero picture at the top of `scroller`: clear at the
